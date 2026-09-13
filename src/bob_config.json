@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "trialguard": {
+      "command": "python",
+      "args": ["src/backend/mcp_server.py"],
+      "env": {},
+      "description": "TrialGuard AI — Clinical Trial Risk Monitor & Protocol Deviation Detector. Provides tools for deviation detection, ICH E6 severity classification, site risk scoring, and CAPA report generation."
+    }
+  }
+}

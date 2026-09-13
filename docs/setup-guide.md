@@ -6,74 +6,161 @@
 
 Before you begin, ensure you have the following installed:
 
-- [ ] [e.g., Python 3.11+]
-- [ ] [e.g., Node.js 18+]
-- [ ] [e.g., Docker Desktop]
-- [ ] [e.g., An IBM Cloud account with watsonx.ai access]
+- [x] **Python 3.11+** — [Download](https://www.python.org/downloads/)
+- [x] **Node.js 18+** — [Download](https://nodejs.org/)
+- [x] **pip** (comes with Python)
+- [x] **npm** (comes with Node.js)
+- [ ] *(Optional)* **uv** — faster Python package installer ([Install](https://docs.astral.sh/uv/))
+- [ ] *(Optional)* **IBM Bob CLI** — for MCP integration testing
+
+No database or cloud account is required. All data is generated synthetically at startup.
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` and fill in the values:
+Copy `.env.example` to `.env` in the `src/` directory:
 
 ```bash
-cp .env.example .env
+cp src/.env.example src/.env
 ```
 
 | Variable | Description | Required |
 |---|---|---|
-| `WATSONX_API_KEY` | Your IBM watsonx.ai API key | Yes |
-| `WATSONX_PROJECT_ID` | Your watsonx.ai project ID | Yes |
-| `DATABASE_URL` | PostgreSQL connection string | Yes |
-| `SLACK_WEBHOOK_URL` | Slack webhook for alerts | No |
+| `APP_PORT` | Backend API port (default: 8000) | No |
+| `APP_ENV` | Environment mode (default: development) | No |
+| `WATSONX_API_KEY` | IBM watsonx.ai API key (for enhanced CAPA reports) | No |
+| `WATSONX_PROJECT_ID` | watsonx.ai project ID | No |
+
+> **Note:** No environment variables are required. The application runs fully out-of-the-box with synthetic data and template-based CAPA generation.
 
 ## Installation
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/[your-org]/[your-repo].git
-cd [your-repo]
+git clone https://github.com/HeerGhevariya/bob-ai-hackathon-TEAM-PHOTON.git
+cd bob-ai-hackathon-TEAM-PHOTON
 
 # 2. Install backend dependencies
-[your command — e.g.: pip install -r requirements.txt]
+cd src/backend
+pip install -r requirements.txt
 
-# 3. Install frontend dependencies (if applicable)
-[your command — e.g.: cd frontend && npm install]
-
-# 4. Set up the database (if applicable)
-[your command — e.g.: python manage.py migrate]
+# 3. Install frontend dependencies
+cd ../frontend
+npm install
 ```
 
 ## Running the Application
 
-```bash
-# Start the backend
-[your command — e.g.: uvicorn app.main:app --reload]
+### Start the Backend (Terminal 1)
 
-# Start the frontend (in a separate terminal, if applicable)
-[your command — e.g.: cd frontend && npm run dev]
+```bash
+cd src/backend
+python main.py
 ```
 
-The application will be available at: `http://localhost:[PORT]`
+You should see:
+```
+🛡️  TrialGuard AI — Clinical Trial Risk Monitor
+==================================================
+Starting backend server on http://localhost:8000
+API docs available at http://localhost:8000/docs
+==================================================
+```
+
+The API is now running at `http://localhost:8000`. You can verify by visiting `http://localhost:8000/docs` for the interactive Swagger UI.
+
+### Start the Frontend (Terminal 2)
+
+```bash
+cd src/frontend
+npm run dev
+```
+
+You should see:
+```
+  VITE v5.x.x  ready in Xms
+
+  ➜  Local:   http://localhost:5173/
+```
+
+Open `http://localhost:5173` in your browser to see the TrialGuard AI dashboard.
+
+### Test IBM Bob MCP Integration (Terminal 3, optional)
+
+```bash
+cd src/backend
+python -m mcp dev mcp_server.py
+```
+
+This launches the MCP Inspector where you can test all 5 tools interactively.
+
+To connect Bob directly, add this to your Bob MCP configuration:
+```json
+{
+  "mcpServers": {
+    "trialguard": {
+      "command": "python",
+      "args": ["src/backend/mcp_server.py"]
+    }
+  }
+}
+```
 
 ## Running Tests
 
 ```bash
-[your test command — e.g.: pytest tests/ -v]
+cd src/backend
+python -c "
+from core.protocol import get_protocol
+from core.synthetic_data import generate_trial_data, get_trial_statistics
+from core.deviation_detector import DeviationDetector
+from core.severity_classifier import SeverityClassifier
+from core.risk_scorer import RiskScorer
+
+# Generate data
+sites, protocol = generate_trial_data(seed=42)
+stats = get_trial_statistics(sites)
+print(f'Sites: {stats[\"total_sites\"]}, Patients: {stats[\"total_patients\"]}, Visits: {stats[\"total_visits\"]}')
+
+# Detect deviations
+detector = DeviationDetector(protocol)
+deviations = detector.detect_all(sites)
+print(f'Deviations detected: {len(deviations)}')
+
+# Classify
+classifier = SeverityClassifier()
+classifier.classify_all(deviations)
+from collections import Counter
+sev = Counter(d.severity for d in deviations)
+print(f'Major: {sev[\"major\"]}, Minor: {sev[\"minor\"]}, Administrative: {sev[\"administrative\"]}')
+
+# Score sites
+from datetime import date
+scorer = RiskScorer(reference_date=date(2024, 9, 1))
+site_info = {s.site_id: {\"name\": s.site_name, \"total_patients\": len(s.patients)} for s in sites}
+profiles = scorer.score_all_sites(deviations, site_info)
+critical = [p for p in profiles if p.risk_tier.value == 'critical']
+print(f'Critical sites: {len(critical)}, Top risk: {profiles[0].site_id} ({profiles[0].risk_score}/100)')
+print('All checks passed!')
+"
 ```
 
-## Quick Demo (Optional)
+## Quick Demo
 
-If you have a demo script or sample data to showcase the project quickly:
+After starting both the backend and frontend:
 
-```bash
-[e.g.: python demo/seed_demo_data.py]
-[e.g.: open http://localhost:8000/demo]
-```
+1. Open `http://localhost:5173` — you'll see the **Trial Overview** with summary statistics
+2. Click **Site Risk Leaderboard** — all 210 sites ranked by risk score
+3. Click any **Critical** or **High** risk site — see detailed deviation history and risk factors
+4. Click **Generate CAPA Report** — produces a full regulatory-standard CAPA report
+5. Use **Deviation Explorer** — filter by severity, type, or site
 
 ## Troubleshooting
 
 | Issue | Solution |
 |---|---|
-| [e.g., `ModuleNotFoundError`] | [e.g., Run `pip install -r requirements.txt` again] |
-| [e.g., Database connection refused] | [e.g., Ensure PostgreSQL is running: `docker compose up db`] |
-| [e.g., watsonx.ai 401 error] | [e.g., Check `WATSONX_API_KEY` in your `.env` file] |
+| `ModuleNotFoundError: No module named 'fastapi'` | Run `pip install -r requirements.txt` from `src/backend/` |
+| `ENOENT: npm not found` | Install Node.js 18+ from https://nodejs.org/ |
+| Backend starts but dashboard shows "Failed to load data" | Ensure the backend is running on port 8000, and the frontend's Vite proxy is configured (check `vite.config.js`) |
+| `Port 8000 already in use` | Kill the existing process or change `APP_PORT` in `.env` |
+| MCP Inspector not opening | Ensure you have `uv` installed: `pip install uv`, then run `uv run mcp dev mcp_server.py` |
+| Frontend shows CORS errors | The backend CORS is configured for `*`. If you changed it, update the allowed origins in `api.py` |

@@ -1,15 +1,10 @@
-https://youtu.be/your-demo-video-link-here
+REPLACE_WITH_YOUR_DEMO_VIDEO_URL
 
-Replace the URL above with a link to your demo video.
+Record a 3-5 minute demo video showing:
+1. The dashboard loading with trial data
+2. Site Risk Leaderboard with risk scores
+3. Drilling into a high-risk site
+4. Generating a CAPA report
+5. (Optional) Bob MCP integration via MCP Inspector
 
-Accepted platforms:
-  - YouTube (public or unlisted)
-  - Loom (https://www.loom.com/share/...)
-  - IBM Box (https://ibm.box.com/s/...)
-  - Google Drive (set to "Anyone with the link can view")
-
-Video requirements:
-  - Length: 3–5 minutes maximum
-  - Must show the application running (not just slides)
-  - Should walk through at least one key feature end-to-end
-  - Audio narration strongly recommended
+Upload to YouTube (unlisted), Loom, or Google Drive, then replace this file content with the URL.

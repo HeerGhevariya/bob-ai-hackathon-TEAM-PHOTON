@@ -1,47 +1,55 @@
-# Source Code
+# Source Code — TrialGuard AI
 
-Place all your project's source code in this folder.
+All source code for the Clinical Trial Risk Monitor & Protocol Deviation Detector.
 
-## Structure Guidelines
+## Structure
 
-Organize your code logically. Here are common patterns — use whatever fits
-your project:
-
-### Web Application
 ```
 src/
-  backend/        ← API server code
-  frontend/       ← UI code
-  shared/         ← Shared utilities/types
+├── backend/                          # Python backend
+│   ├── core/                         # Core analysis engine (deterministic, rule-based)
+│   │   ├── protocol.py               # PHOENIX-301 protocol specification model
+│   │   ├── synthetic_data.py         # Synthetic data generator (200+ sites, 5000+ visits)
+│   │   ├── deviation_detector.py     # Stage 1: Protocol deviation detection
+│   │   ├── severity_classifier.py    # Stage 2: ICH E6(R2) GCP severity classification
+│   │   ├── risk_scorer.py            # Stage 3: Composite site-level risk scoring
+│   │   └── capa_generator.py         # Stage 4: CAPA report generation
+│   ├── mcp_server.py                 # MCP server — IBM Bob integration (5 tools, 2 resources, 2 prompts)
+│   ├── api.py                        # FastAPI REST API for dashboard (7 endpoints)
+│   ├── main.py                       # Backend entry point (uvicorn)
+│   └── requirements.txt              # Python dependencies
+├── frontend/                         # React + Vite dashboard
+│   ├── index.html                    # HTML entry point
+│   ├── package.json                  # Node.js dependencies
+│   ├── vite.config.js                # Vite config with API proxy
+│   └── src/
+│       ├── main.jsx                  # React entry point
+│       ├── App.jsx                   # Main app with routing
+│       ├── index.css                 # Design system (dark clinical theme)
+│       ├── components/               # React components
+│       │   ├── Sidebar.jsx           # Navigation sidebar
+│       │   ├── TrialOverview.jsx     # Dashboard home page
+│       │   ├── SiteLeaderboard.jsx   # Risk-ranked site table
+│       │   ├── SiteDetail.jsx        # Individual site drill-down
+│       │   ├── DeviationExplorer.jsx # Filterable deviation table
+│       │   ├── CapaReport.jsx        # CAPA report generator/viewer
+│       │   ├── RiskBadge.jsx         # Risk tier badge component
+│       │   ├── TrendArrow.jsx        # Trend direction indicator
+│       │   └── SeverityChart.jsx     # Donut chart components
+│       └── utils/
+│           └── api.js                # API fetch utilities
+├── bob_config.json                   # IBM Bob MCP server configuration
+└── .env.example                      # Environment variable template
 ```
 
-### Data / AI Project
+## Running
+
+See the [setup guide](../docs/setup-guide.md) for full instructions.
+
+```bash
+# Backend
+cd src/backend && pip install -r requirements.txt && python main.py
+
+# Frontend (new terminal)
+cd src/frontend && npm install && npm run dev
 ```
-src/
-  data/           ← Data ingestion / preprocessing
-  models/         ← ML model code
-  api/            ← Serving layer
-  notebooks/      ← Jupyter notebooks (exploration)
-```
-
-### CLI / Script-based Tool
-```
-src/
-  cli/            ← CLI entry points
-  lib/            ← Core logic
-  utils/          ← Helpers
-```
-
-## Important Files to Include
-
-- `requirements.txt` or `package.json` — dependency manifest
-- `.env.example` — template for environment variables (NEVER commit `.env`)
-- Any database migration files
-- Configuration files
-
-## What NOT to Include in src/
-
-- `.env` files with real secrets
-- Large binary files (use Git LFS or link externally)
-- `node_modules/` or `venv/` (these are in `.gitignore`)
-- Build artifacts (`dist/`, `build/`, `__pycache__/`)
