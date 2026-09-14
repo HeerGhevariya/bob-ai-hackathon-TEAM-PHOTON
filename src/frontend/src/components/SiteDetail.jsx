@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { useChartTheme } from '../utils/useTheme'
 import { fetchSiteDetail } from '../utils/api'
 import RiskBadge from './RiskBadge'
 import TrendArrow from './TrendArrow'
@@ -10,6 +11,7 @@ export default function SiteDetail() {
   const navigate = useNavigate()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const ct = useChartTheme()
 
   useEffect(() => {
     setLoading(true)
@@ -117,11 +119,11 @@ export default function SiteDetail() {
             <div className="chart-title">Deviation Types</div>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={typeChartData} layout="vertical" margin={{ left: 10, right: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                <XAxis type="number" tick={{ fill: '#5a6478', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis dataKey="name" type="category" tick={{ fill: '#8b95a8', fontSize: 11 }} axisLine={false} tickLine={false} width={130} />
-                <Tooltip contentStyle={{ background: '#111b2e', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, color: '#e8ecf4', fontSize: 13 }} />
-                <Bar dataKey="count" fill="#00d4aa" radius={[0, 4, 4, 0]} barSize={14} />
+                <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} />
+                <XAxis type="number" tick={{ fill: ct.tick, fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis dataKey="name" type="category" tick={{ fill: ct.tick, fontSize: 11 }} axisLine={false} tickLine={false} width={130} />
+                <Tooltip contentStyle={ct.tooltip} />
+                <Bar dataKey="count" fill={ct.accent} radius={[0, 4, 4, 0]} barSize={14} />
               </BarChart>
             </ResponsiveContainer>
           </div>

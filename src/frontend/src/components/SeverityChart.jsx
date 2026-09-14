@@ -1,4 +1,5 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts'
+import { useChartTheme } from '../utils/useTheme'
 
 const SEVERITY_COLORS = {
   major: '#ef4444',
@@ -14,6 +15,7 @@ const TIER_COLORS = {
 }
 
 export function SeverityDonut({ data }) {
+  const ct = useChartTheme()
   const chartData = [
     { name: 'Major', value: data?.major || 0, color: SEVERITY_COLORS.major },
     { name: 'Minor', value: data?.minor || 0, color: SEVERITY_COLORS.minor },
@@ -39,19 +41,11 @@ export function SeverityDonut({ data }) {
             <Cell key={i} fill={entry.color} />
           ))}
         </Pie>
-        <Tooltip
-          contentStyle={{
-            background: '#111b2e',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 8,
-            color: '#e8ecf4',
-            fontSize: 13,
-          }}
-        />
+        <Tooltip contentStyle={ct.tooltip} />
         <Legend
           verticalAlign="bottom"
           height={36}
-          formatter={(value) => <span style={{ color: '#8b95a8', fontSize: 12 }}>{value}</span>}
+          formatter={(value) => <span style={{ color: ct.tick, fontSize: 12 }}>{value}</span>}
         />
       </PieChart>
     </ResponsiveContainer>
@@ -59,6 +53,7 @@ export function SeverityDonut({ data }) {
 }
 
 export function RiskTierDonut({ data }) {
+  const ct = useChartTheme()
   const chartData = [
     { name: 'Critical', value: data?.critical || 0, color: TIER_COLORS.critical },
     { name: 'High', value: data?.high || 0, color: TIER_COLORS.high },
@@ -85,19 +80,11 @@ export function RiskTierDonut({ data }) {
             <Cell key={i} fill={entry.color} />
           ))}
         </Pie>
-        <Tooltip
-          contentStyle={{
-            background: '#111b2e',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 8,
-            color: '#e8ecf4',
-            fontSize: 13,
-          }}
-        />
+        <Tooltip contentStyle={ct.tooltip} />
         <Legend
           verticalAlign="bottom"
           height={36}
-          formatter={(value) => <span style={{ color: '#8b95a8', fontSize: 12 }}>{value}</span>}
+          formatter={(value) => <span style={{ color: ct.tick, fontSize: 12 }}>{value}</span>}
         />
       </PieChart>
     </ResponsiveContainer>

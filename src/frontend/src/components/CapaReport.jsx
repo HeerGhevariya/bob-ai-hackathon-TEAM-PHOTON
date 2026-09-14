@@ -162,10 +162,10 @@ export default function CapaReport() {
                 { label: 'Preventive Actions', value: report.preventive_actions.length, color: 'var(--accent)' },
               ].map((m, i) => (
                 <div key={i} style={{
-                  background: 'rgba(255,255,255,0.02)',
+                  background: 'var(--bg-input)',
                   borderRadius: 'var(--radius-sm)',
                   padding: '14px 16px',
-                  border: '1px solid rgba(255,255,255,0.04)',
+                  border: '1px solid var(--border)',
                 }}>
                   <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, marginBottom: 6 }}>
                     {m.icon || ''} {m.label}
@@ -243,8 +243,8 @@ export default function CapaReport() {
                       borderRadius: 99,
                       fontSize: 12,
                       fontWeight: 500,
-                      background: 'rgba(255,255,255,0.04)',
-                      border: '1px solid rgba(255,255,255,0.08)',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border)',
                       color: 'var(--text-secondary)',
                     }}>
                       {f}
@@ -297,9 +297,9 @@ export default function CapaReport() {
               <div key={i} style={{
                 padding: '18px 20px',
                 marginBottom: 10,
-                background: 'rgba(255,255,255,0.02)',
+                background: 'var(--bg-input)',
                 borderRadius: 'var(--radius-sm)',
-                border: '1px solid rgba(255,255,255,0.04)',
+                border: '1px solid var(--border)',
                 transition: 'all 0.2s ease',
               }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
@@ -331,7 +331,7 @@ export default function CapaReport() {
                       <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>📅 Due: {a.deadline}</span>
                       <span style={{
                         padding: '3px 12px', borderRadius: 99, fontWeight: 600, fontSize: 11,
-                        background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)',
+                        background: 'var(--bg-input)', color: 'var(--text-muted)',
                       }}>
                         {a.status}
                       </span>
@@ -367,9 +367,9 @@ export default function CapaReport() {
               <div key={i} style={{
                 padding: '18px 20px',
                 marginBottom: 10,
-                background: 'rgba(255,255,255,0.02)',
+                background: 'var(--bg-input)',
                 borderRadius: 'var(--radius-sm)',
-                border: '1px solid rgba(255,255,255,0.04)',
+                border: '1px solid var(--border)',
                 transition: 'all 0.2s ease',
               }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
@@ -401,7 +401,7 @@ export default function CapaReport() {
                       <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>📅 Due: {a.deadline}</span>
                       <span style={{
                         padding: '3px 12px', borderRadius: 99, fontWeight: 600, fontSize: 11,
-                        background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)',
+                        background: 'var(--bg-input)', color: 'var(--text-muted)',
                       }}>
                         {a.status}
                       </span>
