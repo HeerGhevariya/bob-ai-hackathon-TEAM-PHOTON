@@ -175,11 +175,13 @@ To connect Bob directly, use the config in `src/bob_config.json`:
   "mcpServers": {
     "trialguard": {
       "command": "python",
-      "args": ["src/backend/mcp_server.py"]
+      "args": ["backend/mcp_server.py"]
     }
   }
 }
 ```
+
+> **Note:** The `bob_config.json` assumes Bob is started from the `src/` directory. If running from the repository root, change the path to `src/backend/mcp_server.py`.
 
 ## Running Tests
 

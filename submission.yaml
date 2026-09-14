@@ -12,17 +12,15 @@ team:
   name: "TEAM PHOTON"                    # REQUIRED — e.g., "Orion Squad"
   track: "AI"                            # REQUIRED — one of: AI | DevOps | Sustainability | Open
   lead:
-    name: "Team Lead"                    # REQUIRED — update with your actual name
-    email: "lead@team.com"               # REQUIRED — update with your actual email
+    name: "Heer Ghevariya"               # REQUIRED
+    email: "24it025@charusat.edu.in"      # REQUIRED
   members:
-    - name: "Member 1"                   # REQUIRED — Team member 1
-      email: "member1@team.com"
-    - name: "Member 2"                   # Add more members by copying the two lines above
-      email: "member2@team.com"
-    - name: "Member 3"
-      email: "member3@team.com"
-    - name: "Member 4"
-      email: "member4@team.com"
+    - name: "Priya Kheni"
+      email: "24it041@charusat.edu.in"
+    - name: "Krina Bhuva"
+      email: "24it006@charusat.edu.in"
+    - name: "Rutvi Arora"
+      email: "24it002@charusat.edu.in"
 
 submission:
   title: "TrialGuard AI — Clinical Trial Risk Monitor & Protocol Deviation Detector"

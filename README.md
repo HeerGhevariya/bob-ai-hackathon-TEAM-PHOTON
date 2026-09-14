@@ -10,8 +10,8 @@
 |---|---|
 | **Team Name** | TEAM PHOTON |
 | **Track** | AI |
-| **Team Lead** | Team Lead — lead@team.com |
-| **Members** | Member 1, Member 2, Member 3, Member 4 |
+| **Team Lead** | Heer Ghevariya — 24it025@charusat.edu.in |
+| **Members** | Priya Kheni, Krina Bhuva, Rutvi Arora |
 
 ---
 
@@ -153,7 +153,7 @@ python main.py
 ## ⚠️ Known Limitations
 
 - **Synthetic data only** — uses generated patient records (no real PHI for privacy/compliance)
-- **No watsonx.ai integration** — CAPA narratives use deterministic templates (watsonx.ai was planned but not implemented due to API access constraints)
+- **watsonx.ai is optional** — IBM watsonx.ai (Granite) integration is implemented with graceful degradation; when `WATSONX_API_KEY` is not configured, CAPA narratives fall back to deterministic templates automatically
 - **Not deployed** — dashboard runs locally only
 - **Risk scoring thresholds are illustrative** — would need calibration with real trial data before production use
 - **Single-protocol demo** — demonstrates with one trial (PHOENIX-301); production would support multiple protocols
