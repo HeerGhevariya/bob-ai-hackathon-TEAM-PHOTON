@@ -6,6 +6,7 @@ import SiteLeaderboard from './components/SiteLeaderboard'
 import SiteDetail from './components/SiteDetail'
 import DeviationExplorer from './components/DeviationExplorer'
 import CapaReport from './components/CapaReport'
+import TrialGuardAssistant from './components/TrialGuardAssistant'
 
 export default function App() {
   const [selectedSiteId, setSelectedSiteId] = useState(null)
@@ -37,6 +38,7 @@ export default function App() {
           <Route path="/capa/:siteId" element={<CapaReport />} />
         </Routes>
       </main>
+      <TrialGuardAssistant />
     </div>
   )
 }

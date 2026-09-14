@@ -18,10 +18,16 @@ adding a new DataSource implementation — the detection, scoring, and reporting
 logic never changes.
 """
 
+import sys
+if hasattr(sys.stdout, "reconfigure"):
+    getattr(sys.stdout, "reconfigure")(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    getattr(sys.stderr, "reconfigure")(encoding="utf-8", errors="replace")
+
 from abc import ABC, abstractmethod
 from collections import Counter
 from datetime import date
-from typing import Optional
+from typing import Any, Optional, cast
 
 from .protocol import ProtocolSpecification, get_protocol
 from .synthetic_data import (
@@ -195,27 +201,31 @@ class SupabaseDataSource(DataSource):
     def __init__(self):
         from db.supabase_client import get_supabase_client
         print("🗄️  Initializing SupabaseDataSource (Supabase PostgreSQL)...")
-        self._client = get_supabase_client()
-        if not self._client:
+        client = get_supabase_client()
+        if not client:
             raise RuntimeError(
                 "Supabase client could not be initialized. "
                 "Check SUPABASE_URL and SUPABASE_ANON_KEY in .env"
             )
+        self._client = client
         self._protocol = get_protocol()
         self._capa_gen = CapaGenerator()
 
         # Cache for performance (loaded once, like the mock)
-        self._sites_cache = None
-        self._deviations_cache = None
-        self._profiles_cache = None
+        self._sites_cache: list[Site] = []
+        self._site_map: dict[str, Site] = {}
+        self._deviations_cache: list[Deviation] = []
+        self._profiles_cache: list[SiteRiskProfile] = []
+        self._profile_map: dict[str, SiteRiskProfile] = {}
         self._load_all_data()
 
     def _load_all_data(self):
         """Load all data from Supabase into memory cache."""
+        assert self._client is not None
         # Load sites
-        sites_data = self._client.table("sites").select("*").execute().data
-        patients_data = self._client.table("patients").select("*").execute().data
-        visits_data = self._client.table("patient_visits").select("*").execute().data
+        sites_data: list[dict[str, Any]] = cast(list[dict[str, Any]], self._client.table("sites").select("*").execute().data or [])
+        patients_data: list[dict[str, Any]] = cast(list[dict[str, Any]], self._client.table("patients").select("*").execute().data or [])
+        visits_data: list[dict[str, Any]] = cast(list[dict[str, Any]], self._client.table("patient_visits").select("*").execute().data or [])
 
         # Build patient map
         patient_map: dict[str, list] = {}
@@ -277,7 +287,7 @@ class SupabaseDataSource(DataSource):
         self._site_map = {s.site_id: s for s in self._sites_cache}
 
         # Load deviations
-        devs_data = self._client.table("deviations").select("*").execute().data
+        devs_data: list[dict[str, Any]] = cast(list[dict[str, Any]], self._client.table("deviations").select("*").execute().data or [])
         self._deviations_cache = []
         for d in devs_data:
             from .protocol import DeviationType
@@ -291,7 +301,7 @@ class SupabaseDataSource(DataSource):
                 description=d["description"],
                 expected_value=d["expected_value"],
                 actual_value=d["actual_value"],
-                detected_date=date.fromisoformat(d["detected_date"]) if d["detected_date"] else None,
+                detected_date=date.fromisoformat(d["detected_date"]) if d.get("detected_date") else date.today(),
                 protocol_reference=d["protocol_reference"],
                 severity=d["severity"],
                 raw_data=d.get("raw_data", {}),
@@ -299,7 +309,7 @@ class SupabaseDataSource(DataSource):
             self._deviations_cache.append(dev)
 
         # Load risk profiles
-        profiles_data = self._client.table("site_risk_profiles").select("*").order("risk_score", desc=True).execute().data
+        profiles_data: list[dict[str, Any]] = cast(list[dict[str, Any]], self._client.table("site_risk_profiles").select("*").order("risk_score", desc=True).execute().data or [])
         from .protocol import RiskTier, TrendDirection
         from .risk_scorer import RiskFactor
         self._profiles_cache = []

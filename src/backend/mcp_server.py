@@ -10,6 +10,25 @@ either MockDataSource (in-memory) or SupabaseDataSource (persistent)
 depending on environment configuration.
 """
 
+import sys
+import os
+import builtins
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+sys.path.insert(0, os.path.dirname(__file__))
+
+# Divert standard print to stderr to keep stdout 100% clean for MCP JSON-RPC protocol
+_orig_print = builtins.print
+def _mcp_stderr_print(*args, **kwargs):
+    if "file" not in kwargs:
+        kwargs["file"] = sys.stderr
+    _orig_print(*args, **kwargs)
+builtins.print = _mcp_stderr_print
+
 from datetime import date
 
 from mcp.server.mcpserver import MCPServer
@@ -39,27 +58,28 @@ def detect_deviations(site_id: str = "") -> str:
     Args:
         site_id: Optional site ID (e.g., 'SITE-042'). If empty, returns summary for all sites.
     """
-    if site_id and _ds.get_site(site_id):
+    if site_id:
         site = _ds.get_site(site_id)
-        devs = _ds.get_deviations_for_site(site_id)
-        
-        if not devs:
-            return f"No deviations found for {site_id} ({site.site_name})."
-        
-        lines = [f"## Deviations for {site_id} — {site.site_name}",
-                 f"Total: {len(devs)} deviation(s)\n"]
-        
-        for d in devs:
-            severity_icon = {"major": "🔴", "minor": "🟡", "administrative": "🔵"}.get(d.severity, "⚪")
-            lines.append(
-                f"- {severity_icon} **{d.severity.upper()}** | {d.deviation_type.value.replace('_', ' ').title()} | "
-                f"Patient {d.patient_id} | {d.visit_name} | {d.description}"
-            )
-        
-        return "\n".join(lines)
-    
-    elif site_id:
-        return f"Site '{site_id}' not found. Use format SITE-001 through SITE-210."
+        if site is not None:
+            devs = _ds.get_deviations_for_site(site_id)
+            
+            if not devs:
+                return f"No deviations found for {site_id} ({site.site_name})."
+            
+            lines = [f"## Deviations for {site_id} — {site.site_name}",
+                     f"Total: {len(devs)} deviation(s)\n"]
+            
+            for d in devs:
+                sev_str = str(d.severity or "unknown").lower()
+                severity_icon = {"major": "🔴", "minor": "🟡", "administrative": "🔵"}.get(sev_str, "⚪")
+                lines.append(
+                    f"- {severity_icon} **{sev_str.upper()}** | {d.deviation_type.value.replace('_', ' ').title()} | "
+                    f"Patient {d.patient_id} | {d.visit_name} | {d.description}"
+                )
+            
+            return "\n".join(lines)
+        else:
+            return f"Site '{site_id}' not found. Use format SITE-001 through SITE-210."
     
     else:
         # Summary across all sites
@@ -373,7 +393,8 @@ def get_site_resource(site_id: str) -> str:
     if devs:
         lines.append("\n## Recent Deviations:")
         for d in devs[:10]:
-            lines.append(f"- [{d.severity.upper()}] {d.description}")
+            sev_label = str(d.severity or "UNKNOWN").upper()
+            lines.append(f"- [{sev_label}] {d.description}")
     
     return "\n".join(lines)
 

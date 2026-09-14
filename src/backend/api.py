@@ -7,17 +7,32 @@ either in-memory synthetic data (MockDataSource) or Supabase
 (SupabaseDataSource) depending on environment configuration.
 """
 
+import sys
+import os
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+sys.path.insert(0, os.path.dirname(__file__))
+
 import json
 from collections import Counter, defaultdict
 from datetime import date
 from typing import Optional
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from core.data_source import get_data_source
+from chatbot_service import process_chat_message, get_default_suggestions
+from mcp_client_service import get_mcp_manager, get_mcp_status
 
 
 # ─── Initialize via DataSource Adapter ────────────────────────────
@@ -26,12 +41,25 @@ _ds = get_data_source()
 _protocol = _ds.get_protocol()
 
 
+# ─── FastAPI Lifespan (Manages persistent MCP client session) ─────
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Connect persistent MCP client session
+    mcp_mgr = get_mcp_manager()
+    await mcp_mgr.connect()
+    yield
+    # Shutdown: Cleanly close MCP client session
+    await mcp_mgr.disconnect()
+
+
 # ─── FastAPI App ──────────────────────────────────────────────────
 
 app = FastAPI(
     title="TrialGuard AI API",
     description="Clinical Trial Risk Monitor & Protocol Deviation Detector",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -307,7 +335,9 @@ def get_trends():
     for d in all_deviations:
         if d.detected_date:
             month_key = d.detected_date.strftime("%Y-%m")
-            monthly[month_key][d.severity] += 1
+            sev = d.severity or "administrative"
+            if sev in monthly[month_key]:
+                monthly[month_key][sev] += 1
             monthly[month_key]["total"] += 1
 
     # Sort by month
@@ -382,3 +412,37 @@ def export_fhir_bundle(site_id: str):
     bundle = site_to_fhir_bundle(site, deviations=devs)
 
     return bundle
+
+
+# ─── Chatbot & MCP API Endpoints ─────────────────────────────────
+
+class ChatRequest(BaseModel):
+    message: str = ""
+    session_id: Optional[str] = None
+    history: Optional[list] = None
+
+
+@app.get("/api/mcp/status")
+async def mcp_status_endpoint():
+    """
+    Real-time health status of the Model Context Protocol (MCP) server.
+    Discovers available tools and returns connection state.
+    """
+    status = await get_mcp_status()
+    return status
+
+
+@app.post("/api/chat")
+async def chat_endpoint(req: ChatRequest):
+    """
+    TrialGuard Assistant conversational AI endpoint.
+    Invokes tools exclusively through the genuine MCP client protocol.
+    """
+    res = await process_chat_message(req.message)
+    return res
+
+
+@app.get("/api/chat/suggestions")
+def chat_suggestions():
+    """Get recommended starter prompts for the TrialGuard Assistant UI."""
+    return {"suggestions": get_default_suggestions()}

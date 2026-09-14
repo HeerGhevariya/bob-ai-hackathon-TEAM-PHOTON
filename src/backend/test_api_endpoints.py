@@ -7,6 +7,10 @@ Usage:
 """
 
 import sys
+if hasattr(sys.stdout, "reconfigure"):
+    getattr(sys.stdout, "reconfigure")(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    getattr(sys.stderr, "reconfigure")(encoding="utf-8", errors="replace")
 import json
 import urllib.request
 import urllib.error
@@ -128,13 +132,46 @@ def main():
         )
     ))
 
-    # Bonus: Data Source Info
-    print("\n[Bonus] GET /api/data-source")
+    # Test 8: MCP Status
+    print("\n[8/10] GET /api/mcp/status")
     results.append(test_endpoint(
-        "Data Source Info",
-        "/api/data-source",
-        lambda d: print(f"      Data source: {d.get('type')} — {d.get('description')}")
+        "MCP Server Status",
+        "/api/mcp/status",
+        lambda d: (
+            assert_key(d, "connected"),
+            assert_true(d.get("connected") is True, f"MCP Server not connected: {d.get('error')}"),
+            assert_key(d, "tools"),
+            assert_true("get_trial_summary" in d.get("tools", []), "Missing get_trial_summary tool"),
+        )
     ))
+
+    # Test 9: Chat Suggestions
+    print("\n[9/10] GET /api/chat/suggestions")
+    results.append(test_endpoint(
+        "Chat Suggestions",
+        "/api/chat/suggestions",
+        lambda d: (
+            assert_key(d, "suggestions"),
+            assert_true(len(d["suggestions"]) > 0, "No suggestions returned"),
+        )
+    ))
+
+    # Test 10: Chat POST
+    print("\n[10/10] POST /api/chat")
+    try:
+        url = f"{BASE_URL}/api/chat"
+        payload = json.dumps({"message": "What is the risk of SITE-042?"}).encode('utf-8')
+        req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+            assert_key(data, "reply")
+            assert_key(data, "tool_used")
+            assert_true("SITE-042" in data["reply"], "Expected SITE-042 in reply")
+            print("   ✅ Chat Endpoint (POST) — OK")
+            results.append(True)
+    except Exception as e:
+        print(f"   ❌ Chat Endpoint (POST) — {e}")
+        results.append(False)
 
     # Summary
     passed = sum(1 for r in results if r)

@@ -250,7 +250,7 @@ class CapaGenerator:
             )
 
         # Analyze deviations
-        severity_counts = Counter(d.severity for d in deviations)
+        severity_counts: dict[str, int] = Counter(d.severity or "unclassified" for d in deviations)
         type_counts = Counter(d.deviation_type for d in deviations)
         most_common_type = type_counts.most_common(1)[0][0]
         patients_affected = len(set(d.patient_id for d in deviations))

@@ -1,5 +1,7 @@
+import { useState, useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import ThemeToggle from './ThemeToggle'
+import { fetchMcpStatus } from '../utils/api'
 
 const navItems = [
   { path: '/', icon: '📊', label: 'Trial Overview' },
@@ -10,6 +12,42 @@ const navItems = [
 
 export default function Sidebar() {
   const location = useLocation()
+  const [mcpState, setMcpState] = useState({
+    status: 'connecting', // 'connected' | 'offline' | 'connecting'
+    toolCount: 0,
+  })
+
+  useEffect(() => {
+    let isMounted = true
+
+    const checkStatus = () => {
+      fetchMcpStatus()
+        .then((res) => {
+          if (isMounted) {
+            if (res && res.connected) {
+              setMcpState({
+                status: 'connected',
+                toolCount: res.tools ? res.tools.length : 5,
+              })
+            } else {
+              setMcpState({ status: 'offline', toolCount: 0 })
+            }
+          }
+        })
+        .catch(() => {
+          if (isMounted) {
+            setMcpState({ status: 'offline', toolCount: 0 })
+          }
+        })
+    }
+
+    checkStatus()
+    const interval = setInterval(checkStatus, 15000) // Poll every 15s
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+    }
+  }, [])
 
   return (
     <aside className="sidebar">
@@ -38,13 +76,42 @@ export default function Sidebar() {
         ))}
 
         <div className="sidebar-section-label" style={{ marginTop: 24 }}>IBM Bob Integration</div>
-        <div className="sidebar-info">
-          <span className="link-icon">🤖</span>
-          MCP Server Active
-          <span className="sidebar-badge" style={{
-            background: 'rgba(34,197,94,0.12)',
-            color: '#22c55e'
-          }}>Live</span>
+        <div className="sidebar-info" style={{ justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span className="link-icon">
+              {mcpState.status === 'connected' ? '🟢' : mcpState.status === 'connecting' ? '🟡' : '🔴'}
+            </span>
+            <span style={{ fontSize: 12, fontWeight: 500 }}>
+              {mcpState.status === 'connected'
+                ? 'MCP Server Connected'
+                : mcpState.status === 'connecting'
+                ? 'MCP Server Connecting'
+                : 'MCP Server Offline'}
+            </span>
+          </div>
+          <span
+            className="sidebar-badge"
+            style={{
+              background:
+                mcpState.status === 'connected'
+                  ? 'rgba(34,197,94,0.12)'
+                  : mcpState.status === 'connecting'
+                  ? 'rgba(245,158,11,0.12)'
+                  : 'rgba(239,68,68,0.12)',
+              color:
+                mcpState.status === 'connected'
+                  ? '#22c55e'
+                  : mcpState.status === 'connecting'
+                  ? '#f59e0b'
+                  : '#ef4444',
+            }}
+          >
+            {mcpState.status === 'connected'
+              ? 'LIVE'
+              : mcpState.status === 'connecting'
+              ? 'CONNECTING'
+              : 'OFFLINE'}
+          </span>
         </div>
 
         <div className="sidebar-section-label" style={{ marginTop: 24 }}>Protocol</div>

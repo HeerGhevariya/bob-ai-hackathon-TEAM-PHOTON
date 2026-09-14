@@ -41,3 +41,25 @@ export async function fetchTrends() {
   if (!res.ok) throw new Error('Failed to fetch trends');
   return res.json();
 }
+
+export async function sendChatMessage(message, history = []) {
+  const res = await fetch(`${API_BASE}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, history }),
+  });
+  if (!res.ok) throw new Error('Failed to send chat message');
+  return res.json();
+}
+
+export async function fetchChatSuggestions() {
+  const res = await fetch(`${API_BASE}/chat/suggestions`);
+  if (!res.ok) throw new Error('Failed to fetch chat suggestions');
+  return res.json();
+}
+
+export async function fetchMcpStatus() {
+  const res = await fetch(`${API_BASE}/mcp/status`);
+  if (!res.ok) throw new Error('Failed to fetch MCP status');
+  return res.json();
+}
