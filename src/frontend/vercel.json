@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://bob-ai-hackathon-team-photon.vercel.app/api/:path*"
+    }
+  ]
+}
