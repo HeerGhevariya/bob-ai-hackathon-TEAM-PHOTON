@@ -2,7 +2,9 @@
 api.py — FastAPI REST API for the TrialGuard AI Dashboard
 
 Serves the React frontend with clinical trial data endpoints.
-All data comes from the core analysis engine (deterministic, in-memory).
+Data comes from the DataSource adapter — which transparently uses
+either in-memory synthetic data (MockDataSource) or Supabase
+(SupabaseDataSource) depending on environment configuration.
 """
 
 import json
@@ -15,30 +17,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 
-from core.protocol import get_protocol
-from core.synthetic_data import generate_trial_data, get_trial_statistics
-from core.deviation_detector import DeviationDetector
-from core.severity_classifier import SeverityClassifier
-from core.risk_scorer import RiskScorer
-from core.capa_generator import CapaGenerator
+from core.data_source import get_data_source
 
 
-# ─── Initialize Analysis Engine ───────────────────────────────────
+# ─── Initialize via DataSource Adapter ────────────────────────────
 
-_sites, _protocol = generate_trial_data(seed=42)
-_detector = DeviationDetector(_protocol)
-_classifier = SeverityClassifier()
-_all_deviations = _classifier.classify_all(_detector.detect_all(_sites))
-_scorer = RiskScorer(reference_date=date(2024, 9, 1))
-_site_info = {
-    s.site_id: {"name": s.site_name, "total_patients": len(s.patients)}
-    for s in _sites
-}
-_risk_profiles = _scorer.score_all_sites(_all_deviations, _site_info)
-_risk_profile_map = {rp.site_id: rp for rp in _risk_profiles}
-_site_map = {s.site_id: s for s in _sites}
-_deviation_map = {d.deviation_id: d for d in _all_deviations}
-_capa_gen = CapaGenerator()
+_ds = get_data_source()
+_protocol = _ds.get_protocol()
 
 
 # ─── FastAPI App ──────────────────────────────────────────────────
@@ -109,10 +94,13 @@ def _profile_to_dict(rp) -> dict:
 @app.get("/api/trial/summary")
 def trial_summary():
     """Get trial-wide statistics and overview."""
-    stats = get_trial_statistics(_sites)
-    severity_counts = Counter(d.severity for d in _all_deviations)
-    type_counts = Counter(d.deviation_type.value for d in _all_deviations)
-    tier_counts = Counter(rp.risk_tier.value for rp in _risk_profiles)
+    all_deviations = _ds.get_all_deviations()
+    risk_profiles = _ds.get_risk_profiles()
+    stats = _ds.get_trial_statistics()
+
+    severity_counts = Counter(d.severity for d in all_deviations)
+    type_counts = Counter(d.deviation_type.value for d in all_deviations)
+    tier_counts = Counter(rp.risk_tier.value for rp in risk_profiles)
 
     return {
         "trial": {
@@ -128,7 +116,7 @@ def trial_summary():
             "countries": stats["countries"],
         },
         "deviations": {
-            "total": len(_all_deviations),
+            "total": len(all_deviations),
             "by_severity": dict(severity_counts),
             "by_type": dict(type_counts),
         },
@@ -136,9 +124,9 @@ def trial_summary():
         "alerts": {
             "critical_sites": [
                 {"site_id": rp.site_id, "site_name": rp.site_name, "risk_score": rp.risk_score}
-                for rp in _risk_profiles if rp.risk_tier.value == "critical"
+                for rp in risk_profiles if rp.risk_tier.value == "critical"
             ],
-            "rising_trends": sum(1 for rp in _risk_profiles if rp.trend_direction.value == "rising"),
+            "rising_trends": sum(1 for rp in risk_profiles if rp.trend_direction.value == "rising"),
         },
     }
 
@@ -151,7 +139,7 @@ def list_sites(
     offset: int = Query(0, ge=0),
 ):
     """List all sites with risk profiles, sortable and filterable."""
-    profiles = _risk_profiles
+    profiles = list(_ds.get_risk_profiles())
 
     if tier:
         profiles = [rp for rp in profiles if rp.risk_tier.value == tier]
@@ -176,12 +164,12 @@ def list_sites(
 @app.get("/api/sites/{site_id}")
 def get_site(site_id: str):
     """Get detailed profile for a specific site."""
-    if site_id not in _site_map:
+    site = _ds.get_site(site_id)
+    if not site:
         raise HTTPException(status_code=404, detail=f"Site '{site_id}' not found")
 
-    site = _site_map[site_id]
-    rp = _risk_profile_map.get(site_id)
-    devs = [d for d in _all_deviations if d.site_id == site_id]
+    rp = _ds.get_risk_profile(site_id)
+    devs = _ds.get_deviations_for_site(site_id)
 
     return {
         "site": {
@@ -216,10 +204,11 @@ def list_deviations(
     offset: int = Query(0, ge=0),
 ):
     """List deviations with optional filtering."""
-    devs = _all_deviations
-
     if site_id:
-        devs = [d for d in devs if d.site_id == site_id]
+        devs = _ds.get_deviations_for_site(site_id)
+    else:
+        devs = _ds.get_all_deviations()
+
     if severity:
         devs = [d for d in devs if d.severity == severity]
     if deviation_type:
@@ -239,7 +228,8 @@ def list_deviations(
 @app.get("/api/deviations/{deviation_id}")
 def get_deviation(deviation_id: str):
     """Get details for a specific deviation."""
-    dev = _deviation_map.get(deviation_id)
+    all_devs = _ds.get_all_deviations()
+    dev = next((d for d in all_devs if d.deviation_id == deviation_id), None)
     if not dev:
         raise HTTPException(status_code=404, detail=f"Deviation '{deviation_id}' not found")
 
@@ -249,14 +239,14 @@ def get_deviation(deviation_id: str):
 @app.get("/api/capa/{site_id}")
 def generate_capa(site_id: str):
     """Generate a CAPA report for a specific site."""
-    if site_id not in _site_map:
+    site = _ds.get_site(site_id)
+    if not site:
         raise HTTPException(status_code=404, detail=f"Site '{site_id}' not found")
 
-    site = _site_map[site_id]
-    devs = [d for d in _all_deviations if d.site_id == site_id]
-    rp = _risk_profile_map.get(site_id)
+    devs = _ds.get_deviations_for_site(site_id)
+    rp = _ds.get_risk_profile(site_id)
 
-    report = _capa_gen.generate_site_report(
+    report = _ds.generate_capa_report(
         site_id=site_id,
         site_name=site.site_name,
         deviations=devs,
@@ -308,10 +298,13 @@ def generate_capa(site_id: str):
 @app.get("/api/trends")
 def get_trends():
     """Get time-series trend data for charts."""
+    all_deviations = _ds.get_all_deviations()
+    risk_profiles = _ds.get_risk_profiles()
+
     # Group deviations by month
     monthly = defaultdict(lambda: {"major": 0, "minor": 0, "administrative": 0, "total": 0})
 
-    for d in _all_deviations:
+    for d in all_deviations:
         if d.detected_date:
             month_key = d.detected_date.strftime("%Y-%m")
             monthly[month_key][d.severity] += 1
@@ -321,10 +314,10 @@ def get_trends():
     sorted_months = sorted(monthly.items())
 
     # Risk tier distribution
-    tier_data = Counter(rp.risk_tier.value for rp in _risk_profiles)
+    tier_data = Counter(rp.risk_tier.value for rp in risk_profiles)
 
     # Deviation type distribution
-    type_data = Counter(d.deviation_type.value for d in _all_deviations)
+    type_data = Counter(d.deviation_type.value for d in all_deviations)
 
     return {
         "monthly_deviations": [
@@ -347,9 +340,45 @@ def get_trends():
         "severity_distribution": [
             {"severity": sev, "count": count}
             for sev, count in [
-                ("major", sum(1 for d in _all_deviations if d.severity == "major")),
-                ("minor", sum(1 for d in _all_deviations if d.severity == "minor")),
-                ("administrative", sum(1 for d in _all_deviations if d.severity == "administrative")),
+                ("major", sum(1 for d in all_deviations if d.severity == "major")),
+                ("minor", sum(1 for d in all_deviations if d.severity == "minor")),
+                ("administrative", sum(1 for d in all_deviations if d.severity == "administrative")),
             ]
         ],
     }
+
+
+@app.get("/api/data-source")
+def get_data_source_info():
+    """Get information about the current data source (mock vs Supabase)."""
+    return {
+        "type": type(_ds).__name__,
+        "description": (
+            "Supabase (PostgreSQL)" if type(_ds).__name__ == "SupabaseDataSource"
+            else "In-memory synthetic data (MockDataSource)"
+        ),
+    }
+
+
+@app.get("/api/export/fhir/{site_id}")
+def export_fhir_bundle(site_id: str):
+    """
+    Export a site's data as a FHIR R4 Bundle.
+
+    Returns all patients, encounters, medication records, and detected
+    deviations in HL7 FHIR R4 format — the industry standard for
+    clinical data exchange.
+
+    This demonstrates that TrialGuard AI data is interoperable with
+    real EHR/EDC systems (e.g., Epic, Cerner, Medidata Rave).
+    """
+    site = _ds.get_site(site_id)
+    if not site:
+        raise HTTPException(status_code=404, detail=f"Site '{site_id}' not found")
+
+    devs = _ds.get_deviations_for_site(site_id)
+
+    from core.fhir_adapter import site_to_fhir_bundle
+    bundle = site_to_fhir_bundle(site, deviations=devs)
+
+    return bundle

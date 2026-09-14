@@ -5,37 +5,24 @@ Exposes the TrialGuard AI clinical trial analysis engine as MCP tools
 that IBM Bob can invoke. Bob connects via stdio transport and gains
 access to deviation detection, risk scoring, and CAPA report generation.
 
-Uses MCP Python SDK v2 (from mcp.server import MCPServer).
+Data comes from the DataSource adapter — which transparently uses
+either MockDataSource (in-memory) or SupabaseDataSource (persistent)
+depending on environment configuration.
 """
 
 from datetime import date
 
-from mcp.server import MCPServer
+from mcp.server.mcpserver import MCPServer
 
-from core.protocol import get_protocol
-from core.synthetic_data import generate_trial_data, get_trial_statistics
-from core.deviation_detector import DeviationDetector
-from core.severity_classifier import SeverityClassifier
-from core.risk_scorer import RiskScorer
-from core.capa_generator import CapaGenerator
+from core.data_source import get_data_source
+
 
 # Initialize the MCP server
 mcp = MCPServer("TrialGuard AI")
 
-# Initialize the analysis engine (runs once at startup)
-_sites, _protocol = generate_trial_data(seed=42)
-_detector = DeviationDetector(_protocol)
-_classifier = SeverityClassifier()
-_all_deviations = _classifier.classify_all(_detector.detect_all(_sites))
-_scorer = RiskScorer(reference_date=date(2024, 9, 1))
-_site_info = {
-    s.site_id: {"name": s.site_name, "total_patients": len(s.patients)}
-    for s in _sites
-}
-_risk_profiles = _scorer.score_all_sites(_all_deviations, _site_info)
-_risk_profile_map = {rp.site_id: rp for rp in _risk_profiles}
-_site_map = {s.site_id: s for s in _sites}
-_capa_gen = CapaGenerator()
+# Initialize the analysis engine via DataSource adapter
+_ds = get_data_source()
+_protocol = _ds.get_protocol()
 
 
 # ──────────────────────────────────────────────────────────
@@ -52,9 +39,9 @@ def detect_deviations(site_id: str = "") -> str:
     Args:
         site_id: Optional site ID (e.g., 'SITE-042'). If empty, returns summary for all sites.
     """
-    if site_id and site_id in _site_map:
-        site = _site_map[site_id]
-        devs = [d for d in _all_deviations if d.site_id == site_id]
+    if site_id and _ds.get_site(site_id):
+        site = _ds.get_site(site_id)
+        devs = _ds.get_deviations_for_site(site_id)
         
         if not devs:
             return f"No deviations found for {site_id} ({site.site_name})."
@@ -77,12 +64,13 @@ def detect_deviations(site_id: str = "") -> str:
     else:
         # Summary across all sites
         from collections import Counter
-        severity_counts = Counter(d.severity for d in _all_deviations)
-        type_counts = Counter(d.deviation_type.value for d in _all_deviations)
+        all_devs = _ds.get_all_deviations()
+        severity_counts = Counter(d.severity for d in all_devs)
+        type_counts = Counter(d.deviation_type.value for d in all_devs)
         
         lines = [
             "## Trial-Wide Deviation Summary",
-            f"Total deviations: {len(_all_deviations)}",
+            f"Total deviations: {len(all_devs)}",
             f"- 🔴 Major: {severity_counts.get('major', 0)}",
             f"- 🟡 Minor: {severity_counts.get('minor', 0)}",
             f"- 🔵 Administrative: {severity_counts.get('administrative', 0)}",
@@ -92,7 +80,8 @@ def detect_deviations(site_id: str = "") -> str:
         for dtype, count in type_counts.most_common():
             lines.append(f"- {dtype.replace('_', ' ').title()}: {count}")
         
-        lines.append(f"\nSites with deviations: {len(set(d.site_id for d in _all_deviations))}/{len(_sites)}")
+        sites = _ds.get_sites()
+        lines.append(f"\nSites with deviations: {len(set(d.site_id for d in all_devs))}/{len(sites)}")
         
         return "\n".join(lines)
 
@@ -108,35 +97,36 @@ def score_site_risk(site_id: str = "", top_n: int = 10) -> str:
         site_id: Optional specific site ID. If empty, returns top N highest-risk sites.
         top_n: Number of top sites to show (default 10). Only used when site_id is empty.
     """
-    if site_id and site_id in _risk_profile_map:
-        rp = _risk_profile_map[site_id]
-        trend_icon = {"rising": "📈", "stable": "➡️", "declining": "📉"}.get(rp.trend_direction.value, "➡️")
-        tier_icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}.get(rp.risk_tier.value, "⚪")
-        
-        lines = [
-            f"## Risk Profile: {rp.site_id} — {rp.site_name}",
-            f"**Risk Score:** {rp.risk_score}/100 {tier_icon} {rp.risk_tier.value.upper()}",
-            f"**Trend:** {trend_icon} {rp.trend_direction.value.title()}",
-            f"**Total Deviations:** {rp.total_deviations} (🔴 {rp.major_count} Major, 🟡 {rp.minor_count} Minor, 🔵 {rp.administrative_count} Admin)",
-            f"**Patients Affected:** {rp.patients_affected}/{rp.total_patients}",
-            f"**Recent (30d):** {rp.recent_deviations_30d} deviations",
-        ]
-        
-        if rp.repeat_deviation_types:
-            lines.append(f"**⚠️ Repeat Patterns:** {', '.join(rp.repeat_deviation_types)}")
-        
-        if rp.top_risk_factors:
-            lines.append("\n### Risk Factors:")
-            for rf in rp.top_risk_factors:
-                lines.append(f"- **{rf.factor_name}** (+{rf.contribution:.1f} pts): {rf.description}")
-        
-        return "\n".join(lines)
-    
-    elif site_id:
-        return f"Site '{site_id}' not found."
+    if site_id:
+        rp = _ds.get_risk_profile(site_id)
+        if rp:
+            trend_icon = {"rising": "📈", "stable": "➡️", "declining": "📉"}.get(rp.trend_direction.value, "➡️")
+            tier_icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}.get(rp.risk_tier.value, "⚪")
+            
+            lines = [
+                f"## Risk Profile: {rp.site_id} — {rp.site_name}",
+                f"**Risk Score:** {rp.risk_score}/100 {tier_icon} {rp.risk_tier.value.upper()}",
+                f"**Trend:** {trend_icon} {rp.trend_direction.value.title()}",
+                f"**Total Deviations:** {rp.total_deviations} (🔴 {rp.major_count} Major, 🟡 {rp.minor_count} Minor, 🔵 {rp.administrative_count} Admin)",
+                f"**Patients Affected:** {rp.patients_affected}/{rp.total_patients}",
+                f"**Recent (30d):** {rp.recent_deviations_30d} deviations",
+            ]
+            
+            if rp.repeat_deviation_types:
+                lines.append(f"**⚠️ Repeat Patterns:** {', '.join(rp.repeat_deviation_types)}")
+            
+            if rp.top_risk_factors:
+                lines.append("\n### Risk Factors:")
+                for rf in rp.top_risk_factors:
+                    lines.append(f"- **{rf.factor_name}** (+{rf.contribution:.1f} pts): {rf.description}")
+            
+            return "\n".join(lines)
+        else:
+            return f"Site '{site_id}' not found."
     
     else:
-        top = _risk_profiles[:top_n]
+        profiles = _ds.get_risk_profiles()
+        top = profiles[:top_n]
         lines = [f"## Top {len(top)} Highest-Risk Sites\n"]
         
         for i, rp in enumerate(top, 1):
@@ -161,14 +151,14 @@ def generate_capa_report(site_id: str) -> str:
     Args:
         site_id: The site ID to generate the report for (e.g., 'SITE-042').
     """
-    if site_id not in _site_map:
+    site = _ds.get_site(site_id)
+    if not site:
         return f"Site '{site_id}' not found. Use format SITE-001 through SITE-210."
     
-    site = _site_map[site_id]
-    site_devs = [d for d in _all_deviations if d.site_id == site_id]
-    risk_profile = _risk_profile_map.get(site_id)
+    site_devs = _ds.get_deviations_for_site(site_id)
+    risk_profile = _ds.get_risk_profile(site_id)
     
-    report = _capa_gen.generate_site_report(
+    report = _ds.generate_capa_report(
         site_id=site_id,
         site_name=site.site_name,
         deviations=site_devs,
@@ -192,7 +182,6 @@ def classify_deviation(deviation_description: str) -> str:
     
     # Determine type and severity from description
     if "missed" in desc_lower or "did not attend" in desc_lower or "no show" in desc_lower:
-        severity = "Major"
         classification = (
             "**Classification: 🔴 MAJOR**\n\n"
             "Per ICH E6(R2), a missed visit is classified as Major because it:\n"
@@ -206,7 +195,6 @@ def classify_deviation(deviation_description: str) -> str:
             "4. Include in next monitoring report"
         )
     elif "dose" in desc_lower or "dosing" in desc_lower or "mg" in desc_lower:
-        severity = "Major/Minor (depends on deviation %)"
         classification = (
             "**Classification: Depends on deviation magnitude**\n\n"
             "Per ICH E6(R2) and protocol PHOENIX-301:\n"
@@ -220,7 +208,6 @@ def classify_deviation(deviation_description: str) -> str:
             "4. Re-training of dispensing staff"
         )
     elif "medication" in desc_lower or "drug" in desc_lower or "co-med" in desc_lower:
-        severity = "Major (high interaction) / Minor (moderate)"
         classification = (
             "**Classification: Depends on interaction severity**\n\n"
             "Per ICH E6(R2) Section 6.5 (Prohibited Medications):\n"
@@ -235,7 +222,6 @@ def classify_deviation(deviation_description: str) -> str:
             "4. Monitor patient for adverse events"
         )
     elif "late" in desc_lower or "delayed" in desc_lower or "overdue" in desc_lower:
-        severity = "Varies by duration"
         classification = (
             "**Classification: Based on days outside visit window**\n\n"
             "Per ICH E6(R2) and protocol visit schedules:\n"
@@ -249,7 +235,6 @@ def classify_deviation(deviation_description: str) -> str:
             "4. Review site scheduling practices"
         )
     else:
-        severity = "Requires specific details for classification"
         classification = (
             "**Cannot definitively classify without specific details.**\n\n"
             "To classify a deviation under ICH E6(R2), I need:\n"
@@ -270,11 +255,13 @@ def get_trial_summary() -> str:
     Returns trial-wide statistics including site counts, patient counts,
     deviation summary, and risk tier distribution.
     """
-    stats = get_trial_statistics(_sites)
+    stats = _ds.get_trial_statistics()
+    all_devs = _ds.get_all_deviations()
+    risk_profiles = _ds.get_risk_profiles()
     
     from collections import Counter
-    severity_counts = Counter(d.severity for d in _all_deviations)
-    tier_counts = Counter(rp.risk_tier.value for rp in _risk_profiles)
+    severity_counts = Counter(d.severity for d in all_devs)
+    tier_counts = Counter(rp.risk_tier.value for rp in risk_profiles)
     
     lines = [
         "## PHOENIX-301 Clinical Trial — Status Dashboard",
@@ -286,7 +273,7 @@ def get_trial_summary() -> str:
         f"- **Protocol:** Phase III, Advanced NSCLC, Phoenixin (PNX-301)",
         "",
         "### Deviation Summary",
-        f"- **Total Deviations Detected:** {len(_all_deviations)}",
+        f"- **Total Deviations Detected:** {len(all_devs)}",
         f"  - 🔴 Major: {severity_counts.get('major', 0)}",
         f"  - 🟡 Minor: {severity_counts.get('minor', 0)}",
         f"  - 🔵 Administrative: {severity_counts.get('administrative', 0)}",
@@ -301,7 +288,7 @@ def get_trial_summary() -> str:
     ]
     
     # Top 3 critical sites
-    critical_sites = [rp for rp in _risk_profiles if rp.risk_tier.value == "critical"]
+    critical_sites = [rp for rp in risk_profiles if rp.risk_tier.value == "critical"]
     if critical_sites:
         lines.append(f"⚠️ **{len(critical_sites)} site(s) at CRITICAL risk level:**")
         for rp in critical_sites[:3]:
@@ -310,9 +297,13 @@ def get_trial_summary() -> str:
         lines.append("✅ No sites at Critical risk level.")
     
     # Rising trends
-    rising = [rp for rp in _risk_profiles if rp.trend_direction.value == "rising"]
+    rising = [rp for rp in risk_profiles if rp.trend_direction.value == "rising"]
     if rising:
         lines.append(f"\n📈 **{len(rising)} site(s) with RISING deviation trends** — requires attention")
+    
+    # Data source info
+    ds_type = type(_ds).__name__
+    lines.append(f"\n*Data source: {ds_type}*")
     
     return "\n".join(lines)
 
@@ -358,12 +349,12 @@ def get_protocol_resource() -> str:
 @mcp.resource("trial://sites/{site_id}")
 def get_site_resource(site_id: str) -> str:
     """Detailed data for a specific clinical trial site."""
-    if site_id not in _site_map:
+    site = _ds.get_site(site_id)
+    if not site:
         return f"Site '{site_id}' not found."
     
-    site = _site_map[site_id]
-    rp = _risk_profile_map.get(site_id)
-    devs = [d for d in _all_deviations if d.site_id == site_id]
+    rp = _ds.get_risk_profile(site_id)
+    devs = _ds.get_deviations_for_site(site_id)
     
     lines = [
         f"# Site: {site.site_id} — {site.site_name}",
