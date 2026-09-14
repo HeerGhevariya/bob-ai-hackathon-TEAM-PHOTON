@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { fetchCapaReport, fetchSites } from '../utils/api'
 
 export default function CapaReport() {
@@ -463,7 +464,7 @@ export default function CapaReport() {
               📄 View Full Regulatory Report (Markdown)
             </summary>
             <div className="capa-report" style={{ marginTop: 12 }}>
-              <ReactMarkdown>{report.full_report_markdown}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{report.full_report_markdown}</ReactMarkdown>
             </div>
           </details>
         </div>

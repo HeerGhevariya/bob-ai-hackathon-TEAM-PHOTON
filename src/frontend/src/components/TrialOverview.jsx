@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { fetchTrialSummary, fetchTrends } from '../utils/api'
 import { SeverityDonut, RiskTierDonut } from './SeverityChart'
+import { useChartTheme } from '../utils/useTheme'
 
 export default function TrialOverview() {
   const [summary, setSummary] = useState(null)
   const [trends, setTrends] = useState(null)
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
+  const ct = useChartTheme()
 
   useEffect(() => {
     Promise.all([fetchTrialSummary(), fetchTrends()])
@@ -74,11 +76,11 @@ export default function TrialOverview() {
           {trends?.deviation_type_distribution && (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={trends.deviation_type_distribution} layout="vertical" margin={{ left: 10, right: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                <XAxis type="number" tick={{ fill: '#5a6478', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis dataKey="type" type="category" tick={{ fill: '#8b95a8', fontSize: 11 }} axisLine={false} tickLine={false} width={110} />
-                <Tooltip contentStyle={{ background: '#111b2e', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, color: '#e8ecf4', fontSize: 13 }} />
-                <Bar dataKey="count" fill="#00d4aa" radius={[0, 4, 4, 0]} barSize={16} />
+                <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} />
+                <XAxis type="number" tick={{ fill: ct.tick, fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis dataKey="type" type="category" tick={{ fill: ct.tick, fontSize: 11 }} axisLine={false} tickLine={false} width={110} />
+                <Tooltip contentStyle={ct.tooltip} />
+                <Bar dataKey="count" fill={ct.accent} radius={[0, 4, 4, 0]} barSize={16} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -91,10 +93,10 @@ export default function TrialOverview() {
           <div className="chart-title">Monthly Deviation Trend</div>
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={trends.monthly_deviations} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-              <XAxis dataKey="month" tick={{ fill: '#5a6478', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: '#5a6478', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ background: '#111b2e', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, color: '#e8ecf4', fontSize: 13 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} />
+              <XAxis dataKey="month" tick={{ fill: ct.tick, fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: ct.tick, fontSize: 11 }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={ct.tooltip} />
               <Bar dataKey="major" stackId="a" fill="#ef4444" radius={[0, 0, 0, 0]} name="Major" />
               <Bar dataKey="minor" stackId="a" fill="#f59e0b" radius={[0, 0, 0, 0]} name="Minor" />
               <Bar dataKey="administrative" stackId="a" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Administrative" />

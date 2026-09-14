@@ -27,7 +27,7 @@ Risk managers today rely on periodic manual sampling with no real-time, cross-si
 
 > TrialGuard AI is a Bob-integrated MCP server that continuously compares patient records against the trial protocol, classifies deviations by ICH E6 severity, scores site-level risk using leading indicators, and generates CAPA-ready regulatory reports — all through deterministic, auditable rules.
 
-The system exposes 5 MCP tools that IBM Bob can call conversationally: deviation detection, severity classification, site risk scoring, CAPA report generation, and trial summary. Every finding traces back to an exact protocol rule and patient record — no black-box AI decisions.
+The system exposes 5 MCP tools that IBM Bob can call conversationally: deviation detection, severity classification, site risk scoring, CAPA report generation, and trial summary. Data is persisted in Supabase (PostgreSQL) and exported in FHIR R4 format for industry interoperability. Every finding traces back to an exact protocol rule and patient record — no black-box AI decisions.
 
 ---
 
@@ -38,6 +38,8 @@ The system exposes 5 MCP tools that IBM Bob can call conversationally: deviation
 - **Composite Site Risk Scoring:** 0-100 risk score per site using severity weighting, trend detection, repetition analysis, and recency bias
 - **CAPA Report Generation:** Regulatory-standard Corrective & Preventive Action reports with root cause analysis and recommended mitigations
 - **IBM Bob MCP Integration:** 5 tools, 2 resources, 2 prompts — Bob can investigate sites, detect deviations, and generate reports conversationally
+- **Supabase Persistence:** Production-ready PostgreSQL storage with DataSource adapter for seamless mock ↔ live data swap
+- **FHIR R4 / CDISC Export:** Industry-standard clinical data interoperability (Patient, Encounter, MedicationAdministration, DetectedIssue)
 
 ---
 
@@ -48,7 +50,8 @@ The system exposes 5 MCP tools that IBM Bob can call conversationally: deviation
 | **Languages** | Python, JavaScript |
 | **Frameworks** | FastAPI, React 18, Vite 5 |
 | **IBM Technologies** | IBM Bob (MCP Server integration) |
-| **Databases** | In-memory (synthetic data generator) |
+| **Databases** | Supabase (PostgreSQL) |
+| **Data Standards** | HL7 FHIR R4, CDISC SDTM |
 | **Other** | MCP Python SDK v2, Recharts, React Router, Uvicorn |
 
 ---
@@ -58,23 +61,29 @@ The system exposes 5 MCP tools that IBM Bob can call conversationally: deviation
 ```
 ├── src/
 │   ├── backend/
-│   │   ├── core/                 # Deterministic analysis engine
-│   │   │   ├── protocol.py       # Protocol specification model
-│   │   │   ├── synthetic_data.py # 200+ sites, 5000+ visits generator
-│   │   │   ├── deviation_detector.py  # Stage 1: Detection
-│   │   │   ├── severity_classifier.py # Stage 2: ICH E6 Classification
-│   │   │   ├── risk_scorer.py    # Stage 3: Site risk scoring
-│   │   │   └── capa_generator.py # Stage 4: CAPA reports
-│   │   ├── mcp_server.py         # MCP server for IBM Bob
-│   │   ├── api.py                # FastAPI REST endpoints
-│   │   └── main.py               # Backend entry point
-│   ├── frontend/                 # React + Vite dashboard
-│   │   └── src/components/       # UI components
-│   └── bob_config.json           # Bob MCP configuration
-├── docs/                         # Written documentation
-├── demo/                         # Demo artifacts
-├── presentation/                 # Slide deck
-└── submission.yaml               # Structured submission metadata
+│   │   ├── core/                    # Deterministic analysis engine
+│   │   │   ├── protocol.py          # Protocol specification model
+│   │   │   ├── synthetic_data.py    # 200+ sites, 5000+ visits generator
+│   │   │   ├── deviation_detector.py    # Stage 1: Detection
+│   │   │   ├── severity_classifier.py   # Stage 2: ICH E6 Classification
+│   │   │   ├── risk_scorer.py       # Stage 3: Site risk scoring
+│   │   │   ├── capa_generator.py    # Stage 4: CAPA reports
+│   │   │   ├── data_source.py       # DataSource adapter (Mock ↔ Supabase)
+│   │   │   └── fhir_adapter.py      # FHIR R4 export layer
+│   │   ├── db/                      # Database layer
+│   │   │   ├── schema.sql           # Supabase table definitions
+│   │   │   ├── seed.py              # Database seeder script
+│   │   │   └── supabase_client.py   # Supabase client singleton
+│   │   ├── mcp_server.py            # MCP server for IBM Bob
+│   │   ├── api.py                   # FastAPI REST endpoints
+│   │   └── main.py                  # Backend entry point
+│   ├── frontend/                    # React + Vite dashboard
+│   │   └── src/components/          # UI components
+│   └── bob_config.json              # Bob MCP configuration
+├── docs/                            # Written documentation
+├── demo/                            # Demo artifacts
+├── presentation/                    # Slide deck
+└── submission.yaml                  # Structured submission metadata
 ```
 
 ---
@@ -82,6 +91,8 @@ The system exposes 5 MCP tools that IBM Bob can call conversationally: deviation
 ## ⚡ How to Run
 
 > **Full setup details: [`docs/setup-guide.md`](docs/setup-guide.md)**
+
+### Quick Start (Zero Config — In-Memory Mode)
 
 ```bash
 # 1. Clone the repo
@@ -94,7 +105,7 @@ pip install -r requirements.txt
 
 # 3. Start the backend API
 python main.py
-# → API running at http://localhost:8000
+# → API running at http://localhost:8080
 
 # 4. Install frontend dependencies (new terminal)
 cd src/frontend
@@ -107,6 +118,23 @@ npm run dev
 # 6. (Optional) Test Bob MCP integration
 cd src/backend
 python -m mcp dev mcp_server.py
+```
+
+### Supabase Mode (Persistent Database)
+
+```bash
+# 1. Set up .env with Supabase credentials (see docs/setup-guide.md)
+cp src/.env.example src/.env
+# Edit src/.env with your SUPABASE_URL and keys
+
+# 2. Run schema.sql in Supabase SQL Editor
+
+# 3. Seed the database
+cd src/backend
+python db/seed.py
+
+# 4. Start the app (same as above — auto-detects Supabase)
+python main.py
 ```
 
 ---
@@ -134,6 +162,8 @@ python -m mcp dev mcp_server.py
 
 ## 🏅 What We're Most Proud Of
 
-**The deterministic, auditable analysis engine.** In clinical trials, "the AI said so" is not an acceptable answer to an FDA auditor. Every deviation TrialGuard detects traces back to an exact protocol rule, an exact patient record, and an exact threshold. The AI (via Bob MCP) is used only to present findings conversationally and help risk managers investigate — it never decides what counts as a deviation, how severe it is, or what the risk score should be. This design choice makes the system trustworthy enough for actual regulated use, not just a demo.
+**The deterministic, auditable analysis engine + production-ready architecture.** In clinical trials, "the AI said so" is not an acceptable answer to an FDA auditor. Every deviation TrialGuard detects traces back to an exact protocol rule, an exact patient record, and an exact threshold. The AI (via Bob MCP) is used only to present findings conversationally and help risk managers investigate — it never decides what counts as a deviation, how severe it is, or what the risk score should be.
+
+The DataSource adapter architecture means the system can swap from synthetic demo data to a real hospital's EDC feed with a single environment variable change — no code modifications to the analysis engine. Combined with FHIR R4 export and Supabase persistence, this is a system designed for regulated production use, not just a hackathon demo.
 
 ---

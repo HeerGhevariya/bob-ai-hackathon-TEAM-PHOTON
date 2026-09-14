@@ -50,13 +50,15 @@ submission:
     - "Composite site-level risk scoring using severity weighting, trend detection, repetition analysis, and recency bias"
     - "CAPA-ready regulatory report generation with root cause analysis and recommended corrective/preventive actions"
     - "IBM Bob MCP integration — 5 tools, 2 resources, 2 prompts for conversational trial monitoring"
+    - "Supabase (PostgreSQL) persistent storage with DataSource adapter for zero-change data source swap"
+    - "FHIR R4 / CDISC SDTM data export — industry-standard clinical data interoperability"
 
   tech_stack:
     languages: ["Python", "JavaScript"]
     frameworks: ["FastAPI", "React", "Vite"]
-    ibm_technologies: ["IBM Bob (MCP Server integration)"]
-    databases: []
-    other: ["MCP Python SDK v2", "Recharts", "React Router", "Uvicorn"]
+    ibm_technologies: ["IBM Bob (MCP Server integration)", "IBM watsonx.ai (Granite — LLM-enhanced CAPA reports)"]
+    databases: ["Supabase (PostgreSQL)"]
+    other: ["MCP Python SDK v2", "Recharts", "React Router", "Uvicorn", "HL7 FHIR R4", "CDISC SDTM"]
 
   what_we_are_most_proud_of: >
     The deterministic, rule-based analysis engine. In a regulated environment,
@@ -69,9 +71,7 @@ submission:
 
   known_limitations: >
     Uses synthetic data (no real patient records for privacy/compliance reasons).
-    The CAPA report generation uses deterministic templates rather than LLM-generated
-    narratives (watsonx.ai integration was planned but not implemented due to API
-    access constraints). The dashboard is not deployed — runs locally only.
+    The dashboard is not deployed — runs locally only.
     Risk scoring thresholds are illustrative and would need calibration with
     real trial data before production use.
 

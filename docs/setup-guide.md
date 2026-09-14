@@ -12,8 +12,9 @@ Before you begin, ensure you have the following installed:
 - [x] **npm** (comes with Node.js)
 - [ ] *(Optional)* **uv** — faster Python package installer ([Install](https://docs.astral.sh/uv/))
 - [ ] *(Optional)* **IBM Bob CLI** — for MCP integration testing
+- [ ] *(Optional)* **Supabase account** — for persistent database mode ([Sign up free](https://supabase.com/))
 
-No database or cloud account is required. All data is generated synthetically at startup.
+No database or cloud account is required for the default mode. All data is generated synthetically at startup.
 
 ## Environment Variables
 
@@ -25,12 +26,15 @@ cp src/.env.example src/.env
 
 | Variable | Description | Required |
 |---|---|---|
-| `APP_PORT` | Backend API port (default: 8000) | No |
+| `APP_PORT` | Backend API port (default: 8080) | No |
 | `APP_ENV` | Environment mode (default: development) | No |
+| `SUPABASE_URL` | Your Supabase project URL | No (enables persistent mode) |
+| `SUPABASE_ANON_KEY` | Supabase anonymous key | No (required if SUPABASE_URL is set) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key | No (required for seed script only) |
 | `WATSONX_API_KEY` | IBM watsonx.ai API key (for enhanced CAPA reports) | No |
 | `WATSONX_PROJECT_ID` | watsonx.ai project ID | No |
 
-> **Note:** No environment variables are required. The application runs fully out-of-the-box with synthetic data and template-based CAPA generation.
+> **Note:** No environment variables are required for the default mode. The application runs fully out-of-the-box with in-memory synthetic data (MockDataSource).
 
 ## Installation
 
@@ -50,7 +54,11 @@ npm install
 
 ## Running the Application
 
-### Start the Backend (Terminal 1)
+### Option A: Default Mode (In-Memory, Zero Config)
+
+No database or `.env` setup needed. Data is generated synthetically.
+
+#### Start the Backend (Terminal 1)
 
 ```bash
 cd src/backend
@@ -61,14 +69,13 @@ You should see:
 ```
 🛡️  TrialGuard AI — Clinical Trial Risk Monitor
 ==================================================
-Starting backend server on http://localhost:8000
-API docs available at http://localhost:8000/docs
+Starting backend server on http://localhost:8080
+📊 Initializing MockDataSource (in-memory synthetic data)...
+   ✅ Loaded 210 sites, 631 patients, 5241 visits, XXX deviations
 ==================================================
 ```
 
-The API is now running at `http://localhost:8000`. You can verify by visiting `http://localhost:8000/docs` for the interactive Swagger UI.
-
-### Start the Frontend (Terminal 2)
+#### Start the Frontend (Terminal 2)
 
 ```bash
 cd src/frontend
@@ -84,7 +91,76 @@ You should see:
 
 Open `http://localhost:5173` in your browser to see the TrialGuard AI dashboard.
 
-### Test IBM Bob MCP Integration (Terminal 3, optional)
+---
+
+### Option B: Supabase Mode (Persistent Database)
+
+#### Step 1: Create a Supabase Project
+
+1. Go to [supabase.com](https://supabase.com/) and create a free project
+2. Copy your project URL and keys from **Settings → API**
+
+#### Step 2: Configure Environment Variables
+
+```bash
+cp src/.env.example src/.env
+```
+
+Edit `src/.env` and fill in:
+```
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+```
+
+#### Step 3: Create Database Tables
+
+Open the **Supabase SQL Editor** and run the contents of:
+```
+src/backend/db/schema.sql
+```
+
+This creates 6 tables: `sites`, `patients`, `patient_visits`, `deviations`, `site_risk_profiles`, `capa_reports` — with indexes and RLS policies.
+
+#### Step 4: Seed the Database
+
+```bash
+cd src/backend
+python db/seed.py
+```
+
+You should see:
+```
+🌱 TrialGuard AI — Supabase Seed Script
+==================================================
+✅ Connected to Supabase: https://your-project...
+📊 Generating synthetic trial data...
+🔍 Running deviation detection pipeline...
+📈 Running risk scoring pipeline...
+📥 Inserting sites... ✅ 210 sites
+📥 Inserting patients... ✅ 631 patients
+📥 Inserting patient visits... ✅ 5241 visits
+📥 Inserting deviations... ✅ XXX deviations
+📥 Inserting risk profiles... ✅ 210 risk profiles
+🎉 Seed complete!
+```
+
+#### Step 5: Run the App
+
+```bash
+# Terminal 1
+cd src/backend
+python main.py
+# → Should show: 🗄️  Initializing SupabaseDataSource (Supabase PostgreSQL)...
+
+# Terminal 2
+cd src/frontend
+npm run dev
+```
+
+---
+
+### Test IBM Bob MCP Integration (Optional, Terminal 3)
 
 ```bash
 cd src/backend
@@ -93,7 +169,7 @@ python -m mcp dev mcp_server.py
 
 This launches the MCP Inspector where you can test all 5 tools interactively.
 
-To connect Bob directly, add this to your Bob MCP configuration:
+To connect Bob directly, use the config in `src/bob_config.json`:
 ```json
 {
   "mcpServers": {
@@ -110,37 +186,34 @@ To connect Bob directly, add this to your Bob MCP configuration:
 ```bash
 cd src/backend
 python -c "
-from core.protocol import get_protocol
-from core.synthetic_data import generate_trial_data, get_trial_statistics
-from core.deviation_detector import DeviationDetector
-from core.severity_classifier import SeverityClassifier
-from core.risk_scorer import RiskScorer
+from core.data_source import get_data_source
 
-# Generate data
-sites, protocol = generate_trial_data(seed=42)
-stats = get_trial_statistics(sites)
-print(f'Sites: {stats[\"total_sites\"]}, Patients: {stats[\"total_patients\"]}, Visits: {stats[\"total_visits\"]}')
+# Initialize data source (Mock or Supabase depending on .env)
+ds = get_data_source()
+print(f'DataSource: {type(ds).__name__}')
 
-# Detect deviations
-detector = DeviationDetector(protocol)
-deviations = detector.detect_all(sites)
-print(f'Deviations detected: {len(deviations)}')
+# Check protocol
+protocol = ds.get_protocol()
+print(f'Protocol: {protocol.protocol_id} — {protocol.protocol_title}')
 
-# Classify
-classifier = SeverityClassifier()
-classifier.classify_all(deviations)
+# Check data
+sites = ds.get_sites()
+devs = ds.get_all_deviations()
+profiles = ds.get_risk_profiles()
 from collections import Counter
-sev = Counter(d.severity for d in deviations)
-print(f'Major: {sev[\"major\"]}, Minor: {sev[\"minor\"]}, Administrative: {sev[\"administrative\"]}')
+sev = Counter(d.severity for d in devs)
 
-# Score sites
-from datetime import date
-scorer = RiskScorer(reference_date=date(2024, 9, 1))
-site_info = {s.site_id: {\"name\": s.site_name, \"total_patients\": len(s.patients)} for s in sites}
-profiles = scorer.score_all_sites(deviations, site_info)
-critical = [p for p in profiles if p.risk_tier.value == 'critical']
-print(f'Critical sites: {len(critical)}, Top risk: {profiles[0].site_id} ({profiles[0].risk_score}/100)')
-print('All checks passed!')
+print(f'Sites: {len(sites)}')
+print(f'Deviations: {len(devs)} (Major: {sev[\"major\"]}, Minor: {sev[\"minor\"]}, Admin: {sev[\"administrative\"]})')
+print(f'Critical sites: {sum(1 for p in profiles if p.risk_tier.value == \"critical\")}')
+print(f'Top risk: {profiles[0].site_id} ({profiles[0].risk_score}/100)')
+
+# Test FHIR export
+from core.fhir_adapter import site_to_fhir_bundle
+bundle = site_to_fhir_bundle(sites[0], ds.get_deviations_for_site(sites[0].site_id))
+print(f'FHIR Bundle: {bundle[\"total\"]} entries for {sites[0].site_id}')
+
+print('\\nAll checks passed! ✅')
 "
 ```
 
@@ -153,14 +226,20 @@ After starting both the backend and frontend:
 3. Click any **Critical** or **High** risk site — see detailed deviation history and risk factors
 4. Click **Generate CAPA Report** — produces a full regulatory-standard CAPA report
 5. Use **Deviation Explorer** — filter by severity, type, or site
+6. Visit `http://localhost:8080/api/export/fhir/SITE-001` — see FHIR R4 Bundle export
+7. Visit `http://localhost:8080/api/data-source` — see which DataSource is active
 
 ## Troubleshooting
 
 | Issue | Solution |
 |---|---|
 | `ModuleNotFoundError: No module named 'fastapi'` | Run `pip install -r requirements.txt` from `src/backend/` |
+| `ModuleNotFoundError: No module named 'supabase'` | Run `pip install supabase` — only needed for Supabase mode |
 | `ENOENT: npm not found` | Install Node.js 18+ from https://nodejs.org/ |
-| Backend starts but dashboard shows "Failed to load data" | Ensure the backend is running on port 8000, and the frontend's Vite proxy is configured (check `vite.config.js`) |
-| `Port 8000 already in use` | Kill the existing process or change `APP_PORT` in `.env` |
+| Backend starts but dashboard shows "Failed to load data" | Ensure the backend is running on port 8080, and the frontend's Vite proxy is configured (check `vite.config.js`) |
+| `Port 8080 already in use` | Kill the existing process or change `APP_PORT` in `.env` |
+| Supabase connection fails | Check `SUPABASE_URL` and `SUPABASE_ANON_KEY` in `src/.env` |
+| Seed script fails | Ensure you ran `schema.sql` in Supabase SQL Editor first |
 | MCP Inspector not opening | Ensure you have `uv` installed: `pip install uv`, then run `uv run mcp dev mcp_server.py` |
 | Frontend shows CORS errors | The backend CORS is configured for `*`. If you changed it, update the allowed origins in `api.py` |
+| App shows `MockDataSource` instead of Supabase | Check that `src/.env` exists and has `SUPABASE_URL` set |

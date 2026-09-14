@@ -1,4 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom'
+import ThemeToggle from './ThemeToggle'
 
 const navItems = [
   { path: '/', icon: '📊', label: 'Trial Overview' },
@@ -37,7 +38,7 @@ export default function Sidebar() {
         ))}
 
         <div className="sidebar-section-label" style={{ marginTop: 24 }}>IBM Bob Integration</div>
-        <div className="sidebar-link" style={{ cursor: 'default', opacity: 0.7 }}>
+        <div className="sidebar-info">
           <span className="link-icon">🤖</span>
           MCP Server Active
           <span className="sidebar-badge" style={{
@@ -47,15 +48,17 @@ export default function Sidebar() {
         </div>
 
         <div className="sidebar-section-label" style={{ marginTop: 24 }}>Protocol</div>
-        <div className="sidebar-link" style={{ cursor: 'default', opacity: 0.7 }}>
+        <div className="sidebar-info">
           <span className="link-icon">📄</span>
           PHOENIX-301
         </div>
-        <div className="sidebar-link" style={{ cursor: 'default', opacity: 0.7 }}>
+        <div className="sidebar-info">
           <span className="link-icon">💊</span>
           Phoenixin (PNX-301)
         </div>
       </nav>
+
+      <ThemeToggle />
 
       <div style={{
         padding: '16px 20px',
@@ -64,7 +67,7 @@ export default function Sidebar() {
         color: 'var(--text-muted)'
       }}>
         <div style={{ fontWeight: 600, marginBottom: 2 }}>TEAM PHOTON</div>
-        <div>Bob AI Hackathon 2024</div>
+        <div>Bob AI Hackathon 2026</div>
       </div>
     </aside>
   )
