@@ -107,15 +107,16 @@ def detect_deviations(site_id: str = "") -> str:
 
 
 @mcp.tool()
-def score_site_risk(site_id: str = "", top_n: int = 10) -> str:
+def score_site_risk(site_id: str = "", top_n: int = 10, order: str = "desc") -> str:
     """Get risk scores for clinical trial sites.
     
     Calculates composite risk scores using severity-weighted deviations,
     trend analysis, repetition patterns, and recency bias.
     
     Args:
-        site_id: Optional specific site ID. If empty, returns top N highest-risk sites.
-        top_n: Number of top sites to show (default 10). Only used when site_id is empty.
+        site_id: Optional specific site ID. If empty, returns top N sites by risk.
+        top_n: Number of sites to show (default 10). Only used when site_id is empty.
+        order: Sort order — 'desc' for highest-risk first (default), 'asc' for lowest-risk first.
     """
     if site_id:
         rp = _ds.get_risk_profile(site_id)
@@ -145,11 +146,21 @@ def score_site_risk(site_id: str = "", top_n: int = 10) -> str:
             return f"Site '{site_id}' not found."
     
     else:
-        profiles = _ds.get_risk_profiles()
-        top = profiles[:top_n]
-        lines = [f"## Top {len(top)} Highest-Risk Sites\n"]
+        profiles = _ds.get_risk_profiles()  # already sorted descending by score
+        if order == "asc":
+            # Reverse to get lowest-risk sites first
+            ordered = list(reversed(profiles))
+            label = "Lowest-Risk"
+            heading = f"## Top {min(top_n, len(ordered))} Lowest-Risk Sites\n"
+        else:
+            ordered = profiles
+            label = "Highest-Risk"
+            heading = f"## Top {min(top_n, len(ordered))} Highest-Risk Sites\n"
         
-        for i, rp in enumerate(top, 1):
+        selected = ordered[:top_n]
+        lines = [heading]
+        
+        for i, rp in enumerate(selected, 1):
             tier_icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}.get(rp.risk_tier.value, "⚪")
             trend_icon = {"rising": "📈", "stable": "➡️", "declining": "📉"}.get(rp.trend_direction.value, "➡️")
             lines.append(
@@ -326,6 +337,382 @@ def get_trial_summary() -> str:
     lines.append(f"\n*Data source: {ds_type}*")
     
     return "\n".join(lines)
+
+
+
+@mcp.tool()
+def filter_sites_by_score_range(min_score: float = 0, max_score: float = 100) -> str:
+    """Get all clinical trial sites whose risk score falls within a specified range.
+
+    Useful for questions like 'show sites with score between 10 and 40',
+    'which sites score around 20-50?', or 'sites in the medium range'.
+
+    Args:
+        min_score: Minimum risk score (inclusive), 0-100.
+        max_score: Maximum risk score (inclusive), 0-100.
+    """
+    if min_score > max_score:
+        min_score, max_score = max_score, min_score
+
+    min_score = max(0.0, min_score)
+    max_score = min(100.0, max_score)
+
+    profiles = _ds.get_risk_profiles()  # already sorted descending by score
+    matched = [rp for rp in profiles if min_score <= rp.risk_score <= max_score]
+
+    if not matched:
+        return (
+            f"## No Sites Found in Score Range {min_score:.0f}–{max_score:.0f}\n\n"
+            f"No sites currently have a risk score between **{min_score:.0f}** and **{max_score:.0f}**.\n\n"
+            f"Try widening the range, or use `score_site_risk` to see the full ranking."
+        )
+
+    lines = [
+        f"## Sites with Risk Score {min_score:.0f}–{max_score:.0f} ({len(matched)} found)\n"
+    ]
+
+    for i, rp in enumerate(matched, 1):
+        tier_icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}.get(
+            rp.risk_tier.value, "⚪"
+        )
+        trend_icon = {"rising": "📈", "stable": "➡️", "declining": "📉"}.get(
+            rp.trend_direction.value, "➡️"
+        )
+        lines.append(
+            f"{i}. {tier_icon} **{rp.site_id}** — {rp.site_name} | "
+            f"Score: **{rp.risk_score}**/100 ({rp.risk_tier.value.upper()}) | "
+            f"{rp.total_deviations} deviations | {trend_icon} {rp.trend_direction.value.title()}"
+        )
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def get_site_details(site_id: str) -> str:
+    """Get full details for a specific clinical trial site.
+
+    Returns location, principal investigator, patient count, enrollment info,
+    risk profile, and a breakdown of all deviation types for that site.
+
+    Args:
+        site_id: The site ID to look up (e.g., 'SITE-042').
+    """
+    site = _ds.get_site(site_id)
+    if not site:
+        return f"Site '{site_id}' not found. Use format SITE-001 through SITE-210."
+
+    rp = _ds.get_risk_profile(site_id)
+    devs = _ds.get_deviations_for_site(site_id)
+
+    from collections import Counter
+    type_counts = Counter(d.deviation_type.value for d in devs)
+    sev_counts = Counter(d.severity for d in devs)
+
+    tier_icon = {
+        "critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"
+    }.get(rp.risk_tier.value if rp else "low", "⚪")
+
+    lines = [
+        f"## Site: {site.site_id} — {site.site_name}",
+        f"**Location:** {site.city}, {site.country}",
+        f"**Principal Investigator:** {site.principal_investigator}",
+        f"**Patients Enrolled:** {len(site.patients)}",
+    ]
+
+    if rp:
+        trend_icon = {"rising": "📈", "stable": "➡️", "declining": "📉"}.get(
+            rp.trend_direction.value, "➡️"
+        )
+        lines += [
+            "",
+            f"### Risk Profile",
+            f"- **Score:** {rp.risk_score}/100 {tier_icon} ({rp.risk_tier.value.upper()})",
+            f"- **Trend:** {trend_icon} {rp.trend_direction.value.title()}",
+            f"- **Total Deviations:** {rp.total_deviations}",
+            f"- **Patients Affected:** {rp.patients_affected}/{rp.total_patients}",
+            f"- **Recent (30d):** {rp.recent_deviations_30d} deviations",
+            f"- 🔴 Major: {rp.major_count}  🟡 Minor: {rp.minor_count}  🔵 Admin: {rp.administrative_count}",
+        ]
+
+        if rp.repeat_deviation_types:
+            lines.append(f"- **⚠️ Repeat Patterns:** {', '.join(rp.repeat_deviation_types)}")
+
+    if type_counts:
+        lines.append("\n### Deviation Type Breakdown")
+        for dtype, count in type_counts.most_common():
+            lines.append(f"- {dtype.replace('_', ' ').title()}: {count}")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def get_sites_by_country(country: str = "") -> str:
+    """Get a summary of all clinical trial sites grouped by country.
+
+    Returns site counts, patient counts, average risk scores per country.
+    If country is specified, lists all sites in that country with their risk tier.
+
+    Args:
+        country: Optional country name (e.g., 'USA', 'Germany'). If empty, returns all countries.
+    """
+    from collections import defaultdict
+
+    sites = _ds.get_sites()
+    profiles = {rp.site_id: rp for rp in _ds.get_risk_profiles()}
+
+    if country:
+        # Filter by country (case-insensitive)
+        matched = [s for s in sites if country.lower() in s.country.lower()]
+        if not matched:
+            # List available countries
+            available = sorted(set(s.country for s in sites))
+            return (
+                f"No sites found for country: '{country}'.\n\n"
+                f"**Available countries ({len(available)}):**\n" +
+                ", ".join(available)
+            )
+
+        lines = [
+            f"## Sites in {matched[0].country} ({len(matched)} sites)\n"
+        ]
+        for s in sorted(matched, key=lambda x: x.site_id):
+            rp = profiles.get(s.site_id)
+            tier_icon = {
+                "critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"
+            }.get(rp.risk_tier.value if rp else "low", "⚪")
+            score_str = f"{rp.risk_score}/100" if rp else "N/A"
+            lines.append(
+                f"- {tier_icon} **{s.site_id}** — {s.site_name} | "
+                f"Score: {score_str} | PI: {s.principal_investigator} | "
+                f"Patients: {len(s.patients)}"
+            )
+        return "\n".join(lines)
+
+    else:
+        # Aggregate by country
+        country_data = defaultdict(lambda: {"sites": [], "patients": 0, "scores": []})
+        for s in sites:
+            rp = profiles.get(s.site_id)
+            country_data[s.country]["sites"].append(s.site_id)
+            country_data[s.country]["patients"] += len(s.patients)
+            if rp:
+                country_data[s.country]["scores"].append(rp.risk_score)
+
+        lines = [f"## Trial Country Distribution ({len(country_data)} countries)\n"]
+        sorted_countries = sorted(
+            country_data.items(),
+            key=lambda x: len(x[1]["sites"]),
+            reverse=True
+        )
+        for ctry, data in sorted_countries:
+            avg_score = (
+                round(sum(data["scores"]) / len(data["scores"]), 1)
+                if data["scores"] else 0
+            )
+            lines.append(
+                f"- **{ctry}** — {len(data['sites'])} sites | "
+                f"{data['patients']} patients | Avg risk: {avg_score}/100"
+            )
+
+        return "\n".join(lines)
+
+
+@mcp.tool()
+def get_sites_by_tier(tier: str = "critical", top_n: int = 10) -> str:
+    """Get all sites at a specific risk tier level.
+
+    Args:
+        tier: Risk tier to filter by — 'critical', 'high', 'medium', or 'low'.
+        top_n: Maximum number of sites to return (default 10).
+    """
+    tier_lower = tier.lower().strip()
+    valid_tiers = {"critical", "high", "medium", "low"}
+    if tier_lower not in valid_tiers:
+        return (
+            f"Invalid tier '{tier}'. Valid tiers: critical, high, medium, low.\n\n"
+            f"**Examples:**\n"
+            f"- 'Show me critical sites'\n"
+            f"- 'Which sites are at high risk?'\n"
+            f"- 'List low-risk sites'"
+        )
+
+    profiles = _ds.get_risk_profiles()
+    matched = [rp for rp in profiles if rp.risk_tier.value == tier_lower]
+
+    tier_icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}.get(tier_lower, "⚪")
+
+    if not matched:
+        return f"No sites currently at **{tier_lower.upper()}** risk tier."
+
+    lines = [
+        f"## {tier_icon} {tier_lower.upper()} Risk Sites ({len(matched)} total)\n"
+    ]
+
+    for i, rp in enumerate(matched[:top_n], 1):
+        trend_icon = {"rising": "📈", "stable": "➡️", "declining": "📉"}.get(
+            rp.trend_direction.value, "➡️"
+        )
+        lines.append(
+            f"{i}. **{rp.site_id}** — {rp.site_name} | "
+            f"Score: {rp.risk_score}/100 | {rp.total_deviations} deviations | "
+            f"{trend_icon} {rp.trend_direction.value.title()}"
+        )
+
+    if len(matched) > top_n:
+        lines.append(f"\n*... and {len(matched) - top_n} more {tier_lower} sites.*")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def get_trending_sites(direction: str = "rising", top_n: int = 10) -> str:
+    """Get sites by their deviation trend direction.
+
+    Args:
+        direction: Trend to filter by — 'rising', 'stable', or 'declining'.
+        top_n: Maximum number of sites to return (default 10).
+    """
+    direction_lower = direction.lower().strip()
+    valid_dirs = {"rising", "stable", "declining"}
+    if direction_lower not in valid_dirs:
+        return f"Invalid direction '{direction}'. Valid values: rising, stable, declining."
+
+    profiles = _ds.get_risk_profiles()
+    matched = [rp for rp in profiles if rp.trend_direction.value == direction_lower]
+
+    icon_map = {"rising": "📈", "stable": "➡️", "declining": "📉"}
+    trend_icon = icon_map.get(direction_lower, "➡️")
+
+    if not matched:
+        return f"No sites currently showing a **{direction_lower}** deviation trend."
+
+    lines = [
+        f"## {trend_icon} Sites with {direction_lower.title()} Deviation Trends ({len(matched)} total)\n"
+    ]
+
+    if direction_lower == "rising":
+        lines.append(
+            "⚠️ *These sites are getting worse over time — they require proactive attention.*\n"
+        )
+    elif direction_lower == "declining":
+        lines.append(
+            "✅ *These sites are improving — recent interventions appear to be working.*\n"
+        )
+
+    for i, rp in enumerate(matched[:top_n], 1):
+        tier_icon = {
+            "critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"
+        }.get(rp.risk_tier.value, "⚪")
+        lines.append(
+            f"{i}. {tier_icon} **{rp.site_id}** — {rp.site_name} | "
+            f"Score: {rp.risk_score}/100 ({rp.risk_tier.value.upper()}) | "
+            f"{rp.total_deviations} deviations"
+        )
+
+    if len(matched) > top_n:
+        lines.append(f"\n*... and {len(matched) - top_n} more {direction_lower} sites.*")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def get_deviation_type_breakdown(site_id: str = "", deviation_type: str = "") -> str:
+    """Analyze deviations by type across the trial or for a specific site.
+
+    Deviation types: missed_visit, late_visit, early_visit, wrong_dose,
+    banned_comedication, missing_assessment.
+
+    Args:
+        site_id: Optional site ID to scope to a single site.
+        deviation_type: Optional type filter (e.g., 'missed_visit', 'wrong_dose').
+                        If empty, returns a breakdown of all types.
+    """
+    from collections import Counter, defaultdict
+
+    if site_id:
+        site = _ds.get_site(site_id)
+        if not site:
+            return f"Site '{site_id}' not found."
+        devs = _ds.get_deviations_for_site(site_id)
+        scope_label = f"{site_id} ({site.site_name})"
+    else:
+        devs = _ds.get_all_deviations()
+        scope_label = "All Sites (Trial-Wide)"
+
+    if not devs:
+        return f"No deviations found for {scope_label}."
+
+    # Filter by deviation type if specified
+    VALID_TYPES = {
+        "missed_visit", "late_visit", "early_visit",
+        "wrong_dose", "banned_comedication", "missing_assessment"
+    }
+
+    if deviation_type:
+        dtype_lower = deviation_type.lower().replace(" ", "_")
+        if dtype_lower not in VALID_TYPES:
+            return (
+                f"Unknown deviation type '{deviation_type}'.\n\n"
+                f"**Valid types:** {', '.join(sorted(VALID_TYPES))}"
+            )
+
+        filtered = [d for d in devs if d.deviation_type.value == dtype_lower]
+        if not filtered:
+            return f"No '{dtype_lower}' deviations found for {scope_label}."
+
+        sev_counts = Counter(d.severity for d in filtered)
+        site_counts = Counter(d.site_id for d in filtered)
+        lines = [
+            f"## {dtype_lower.replace('_', ' ').title()} Deviations — {scope_label}",
+            f"**Total:** {len(filtered)}",
+            f"- 🔴 Major: {sev_counts.get('major', 0)}",
+            f"- 🟡 Minor: {sev_counts.get('minor', 0)}",
+            f"- 🔵 Administrative: {sev_counts.get('administrative', 0)}",
+        ]
+
+        if not site_id:
+            lines.append(f"\n**Top Sites with this deviation type:**")
+            profiles = {rp.site_id: rp for rp in _ds.get_risk_profiles()}
+            for sid, count in site_counts.most_common(10):
+                rp = profiles.get(sid)
+                site = _ds.get_site(sid)
+                name = site.site_name if site else sid
+                lines.append(f"- **{sid}** ({name}): {count} deviations")
+
+        return "\n".join(lines)
+
+    else:
+        # Full breakdown by type
+        type_counts = Counter(d.deviation_type.value for d in devs)
+        sev_counts = Counter(d.severity for d in devs)
+
+        TYPE_ICONS = {
+            "missed_visit": "🚫",
+            "late_visit": "⏰",
+            "early_visit": "⏩",
+            "wrong_dose": "💊",
+            "banned_comedication": "⚠️",
+            "missing_assessment": "📋",
+        }
+
+        lines = [
+            f"## Deviation Type Breakdown — {scope_label}",
+            f"**Total Deviations:** {len(devs)}",
+            f"- 🔴 Major: {sev_counts.get('major', 0)}",
+            f"- 🟡 Minor: {sev_counts.get('minor', 0)}",
+            f"- 🔵 Administrative: {sev_counts.get('administrative', 0)}",
+            "",
+            "### By Type:",
+        ]
+
+        for dtype, count in type_counts.most_common():
+            icon = TYPE_ICONS.get(dtype, "•")
+            pct = round(count / len(devs) * 100, 1)
+            lines.append(
+                f"- {icon} **{dtype.replace('_', ' ').title()}**: {count} ({pct}%)"
+            )
+
+        return "\n".join(lines)
 
 
 # ──────────────────────────────────────────────────────────
