@@ -18,21 +18,153 @@ if hasattr(sys.stderr, "reconfigure"):
 sys.path.insert(0, os.path.dirname(__file__))
 
 import json
+import os
+import uuid
 from collections import Counter, defaultdict
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, Query, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 
 from core.data_source import get_data_source
 from chatbot_service import process_chat_message, get_default_suggestions
 from mcp_client_service import get_mcp_manager, get_mcp_status
+
+# ─── Auth helpers ─────────────────────────────────────────────────
+try:
+    from jose import jwt, JWTError
+    import bcrypt as _bcrypt_lib
+    _AUTH_AVAILABLE = True
+except ImportError:
+    _AUTH_AVAILABLE = False
+
+_JWT_SECRET = os.getenv("JWT_SECRET", "trialgard-hackathon-secret-2026")
+_JWT_ALGORITHM = "HS256"
+_JWT_EXPIRE_HOURS = 24
+
+
+def _hash_password(plain: str) -> str:
+    """Hash a plaintext password with bcrypt."""
+    return _bcrypt_lib.hashpw(plain.encode("utf-8"), _bcrypt_lib.gensalt()).decode("utf-8")
+
+
+def _verify_password(plain: str, hashed: str) -> bool:
+    """Verify a plaintext password against a bcrypt hash."""
+    return _bcrypt_lib.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+
+
+_bearer = HTTPBearer(auto_error=False)
+
+# In-memory user store — pre-seeded with demo accounts as fallback
+# (used when Supabase is not configured or the users table is empty)
+_IN_MEMORY_USERS: dict[str, dict] = {}
+if _AUTH_AVAILABLE:
+    _demo_hash = _hash_password("Demo@2026")
+    _IN_MEMORY_USERS = {
+        "demo@trialgard.ai": {
+            "id": "demo-judge-001",
+            "email": "demo@trialgard.ai",
+            "full_name": "Demo User",
+            "role": "judge",
+            "password_hash": _demo_hash,
+        },
+        "reviewer@trialgard.ai": {
+            "id": "demo-reviewer-001",
+            "email": "reviewer@trialgard.ai",
+            "full_name": "Clinical Reviewer",
+            "role": "reviewer",
+            "password_hash": _demo_hash,
+        },
+        "admin@trialgard.ai": {
+            "id": "demo-admin-001",
+            "email": "admin@trialgard.ai",
+            "full_name": "Trial Administrator",
+            "role": "admin",
+            "password_hash": _demo_hash,
+        },
+    }
+
+
+def _get_user_by_email(email: str) -> Optional[dict]:
+    """Look up a user — tries Supabase first, falls back to in-memory store."""
+    from db.supabase_client import get_supabase_client
+    sb = get_supabase_client()
+    if sb:
+        try:
+            res = sb.table("users").select("*").eq("email", email).limit(1).execute()
+            if res.data:
+                return res.data[0]
+        except Exception:
+            pass
+    return _IN_MEMORY_USERS.get(email)
+
+
+def _create_user(email: str, full_name: str, password: str, role: str = "reviewer") -> dict:
+    """Create a new user — tries Supabase first, falls back to in-memory store."""
+    if not _AUTH_AVAILABLE:
+        raise HTTPException(status_code=500, detail="Auth libraries not installed")
+    user_id = str(uuid.uuid4())
+    password_hash = _hash_password(password)
+    user = {
+        "id": user_id,
+        "email": email,
+        "full_name": full_name,
+        "role": role,
+        "password_hash": password_hash,
+    }
+    from db.supabase_client import get_supabase_client
+    sb = get_supabase_client()
+    if sb:
+        try:
+            res = sb.table("users").insert({
+                "id": user_id,
+                "email": email,
+                "full_name": full_name,
+                "role": role,
+                "password_hash": password_hash,
+            }).execute()
+            if res.data:
+                return res.data[0]
+        except Exception:
+            pass
+    # Fallback: store in memory
+    _IN_MEMORY_USERS[email] = user
+    return user
+
+
+def _make_token(user: dict) -> str:
+    """Sign a JWT for the given user dict."""
+    payload = {
+        "sub": user["id"],
+        "email": user["email"],
+        "full_name": user["full_name"],
+        "role": user["role"],
+        "exp": int((datetime.now(timezone.utc).timestamp()) + _JWT_EXPIRE_HOURS * 3600),
+    }
+    return jwt.encode(payload, _JWT_SECRET, algorithm=_JWT_ALGORITHM)
+
+
+def _decode_token(token: str) -> dict:
+    """Decode and validate a JWT. Raises HTTPException on failure."""
+    try:
+        payload = jwt.decode(token, _JWT_SECRET, algorithms=[_JWT_ALGORITHM])
+        return payload
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+
+def _require_auth(credentials: HTTPAuthorizationCredentials = Depends(_bearer)) -> dict:
+    """FastAPI dependency — validates Bearer token and returns payload."""
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Authorization header missing")
+    return _decode_token(credentials.credentials)
 
 
 # ─── Initialize via DataSource Adapter ────────────────────────────
@@ -446,3 +578,92 @@ async def chat_endpoint(req: ChatRequest):
 def chat_suggestions():
     """Get recommended starter prompts for the TrialGuard Assistant UI."""
     return {"suggestions": get_default_suggestions()}
+
+
+# ─── Auth Endpoints ───────────────────────────────────────────────
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    full_name: str
+    role: str = "reviewer"
+
+
+@app.post("/api/auth/login")
+def auth_login(req: LoginRequest):
+    """
+    Authenticate a user and return a signed JWT token.
+
+    Demo credentials (pre-seeded):
+      judge@trialgard.ai / Demo@2026
+    """
+    if not _AUTH_AVAILABLE:
+        raise HTTPException(status_code=500, detail="Auth libraries (python-jose, bcrypt) not installed")
+
+    user = _get_user_by_email(req.email.lower().strip())
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    if not _verify_password(req.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    token = _make_token(user)
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": user["id"],
+            "email": user["email"],
+            "full_name": user["full_name"],
+            "role": user["role"],
+        },
+    }
+
+
+@app.post("/api/auth/register")
+def auth_register(req: RegisterRequest):
+    """
+    Register a new user account and return a signed JWT token.
+    """
+    if not _AUTH_AVAILABLE:
+        raise HTTPException(status_code=500, detail="Auth libraries not installed")
+
+    email = req.email.lower().strip()
+    if _get_user_by_email(email):
+        raise HTTPException(status_code=409, detail="An account with this email already exists")
+
+    if len(req.password) < 6:
+        raise HTTPException(status_code=422, detail="Password must be at least 6 characters")
+
+    role = req.role if req.role in ("admin", "reviewer", "judge") else "reviewer"
+    user = _create_user(email, req.full_name, req.password, role)
+    token = _make_token(user)
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": user["id"],
+            "email": user["email"],
+            "full_name": user["full_name"],
+            "role": user["role"],
+        },
+    }
+
+
+@app.get("/api/auth/me")
+def auth_me(current_user: dict = Depends(_require_auth)):
+    """
+    Return the current authenticated user's profile.
+    Validates the Bearer token sent in the Authorization header.
+    """
+    return {
+        "id": current_user["sub"],
+        "email": current_user["email"],
+        "full_name": current_user["full_name"],
+        "role": current_user["role"],
+    }

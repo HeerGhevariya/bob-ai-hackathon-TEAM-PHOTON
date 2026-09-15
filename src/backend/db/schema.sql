@@ -110,7 +110,20 @@ CREATE TABLE IF NOT EXISTS capa_reports (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ─── Users (Authentication) ──────────────────────────────────────────────────
+-- Stores user accounts for the TrialGuard AI dashboard login system.
+-- Demo accounts (judge, reviewer, admin) are seeded via db/seed.py.
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT NOT NULL UNIQUE,
+  full_name TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'reviewer' CHECK (role IN ('admin', 'reviewer', 'judge')),
+  password_hash TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ─── Indexes ─────────────────────────────────────────────────────────────────
+
 CREATE INDEX IF NOT EXISTS idx_patients_site ON patients(site_id);
 CREATE INDEX IF NOT EXISTS idx_visits_site ON patient_visits(site_id);
 CREATE INDEX IF NOT EXISTS idx_visits_patient ON patient_visits(patient_id);
@@ -128,6 +141,7 @@ ALTER TABLE patient_visits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE deviations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE site_risk_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE capa_reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 
 -- Development policies: allow all access via service role and anon key
 CREATE POLICY "Allow all access" ON sites FOR ALL USING (true);
@@ -136,3 +150,4 @@ CREATE POLICY "Allow all access" ON patient_visits FOR ALL USING (true);
 CREATE POLICY "Allow all access" ON deviations FOR ALL USING (true);
 CREATE POLICY "Allow all access" ON site_risk_profiles FOR ALL USING (true);
 CREATE POLICY "Allow all access" ON capa_reports FOR ALL USING (true);
+CREATE POLICY "Allow all access" ON users FOR ALL USING (true);
