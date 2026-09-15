@@ -1,10 +1,1 @@
-REPLACE_WITH_YOUR_DEMO_VIDEO_URL
-
-Record a 3-5 minute demo video showing:
-1. The dashboard loading with trial data
-2. Site Risk Leaderboard with risk scores
-3. Drilling into a high-risk site
-4. Generating a CAPA report
-5. (Optional) Bob MCP integration via MCP Inspector
-
-Upload to YouTube (unlisted), Loom, or Google Drive, then replace this file content with the URL.
+https://youtu.be/aRb2Kv7IlE4
