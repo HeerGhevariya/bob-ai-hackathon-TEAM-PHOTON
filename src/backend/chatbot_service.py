@@ -294,6 +294,16 @@ def _classify_intent_keywords(message: str) -> Dict[str, Any]:
     if dtype:
         return {"intent": "deviation_type", "site_id": site_id, "extra_param": dtype}
 
+    # Standalone tier keywords (e.g. "show critical sites", "medium sites", "high sites")
+    if any(k in text_lower for k in ["critical sites", "critical site", "critical tier"]):
+        return {"intent": "tier_filter", "site_id": None, "extra_param": "critical"}
+    if any(k in text_lower for k in ["medium sites", "medium tier", "medium score sites", "medium score"]):
+        return {"intent": "tier_filter", "site_id": None, "extra_param": "medium"}
+    if any(k in text_lower for k in ["high sites", "high tier", "high score sites", "high score"]):
+        return {"intent": "tier_filter", "site_id": None, "extra_param": "high"}
+    if any(k in text_lower for k in ["low sites", "low tier", "low score sites"]):
+        return {"intent": "tier_filter", "site_id": None, "extra_param": "low"}
+
     if any(k in text_lower for k in ["lowest risk", "lowest-risk", "safest", "best performing", "least risky", "minimum risk", "lowest score", "best sites"]):
         return {"intent": "lowest_risk", "site_id": site_id, "extra_param": None}
 
