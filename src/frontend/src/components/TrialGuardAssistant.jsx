@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -26,9 +26,82 @@ export default function TrialGuardAssistant({ initialOpen = false }) {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [activeSuggestions, setActiveSuggestions] = useState([])
+  
+  // Dragging state
+  const [position, setPosition] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const dragStart = useRef({ x: 0, y: 0, moved: false, startX: 0, startY: 0 })
+  
+  const [windowSize, setWindowSize] = useState({
+    width: window.innerWidth,
+    height: window.innerHeight
+  })
+
+  useEffect(() => {
+    const handleResize = () => setWindowSize({ width: window.innerWidth, height: window.innerHeight })
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
   const navigate = useNavigate()
+
+  const handlePointerDown = (e) => {
+    if (e.button !== 0) return
+    setIsDragging(true)
+    dragStart.current = {
+      x: e.clientX - position.x,
+      y: e.clientY - position.y,
+      startX: e.clientX,
+      startY: e.clientY,
+      moved: false
+    }
+    e.target.setPointerCapture(e.pointerId)
+  }
+
+  const handlePointerMove = (e) => {
+    if (!isDragging) return
+    if (!dragStart.current.moved) {
+      if (Math.abs(e.clientX - dragStart.current.startX) > 3 || Math.abs(e.clientY - dragStart.current.startY) > 3) {
+        dragStart.current.moved = true
+      }
+    }
+    
+    let newX = e.clientX - dragStart.current.x
+    let newY = e.clientY - dragStart.current.y
+
+    // Keep the button within screen bounds (with a 10px safety margin)
+    const BUTTON_WIDTH = 160
+    const BUTTON_HEIGHT = 48
+    const MARGIN = 10
+
+    const minX = -(window.innerWidth - 28 - BUTTON_WIDTH - MARGIN)
+    const maxX = 28 - MARGIN
+    
+    const minY = -(window.innerHeight - 24 - BUTTON_HEIGHT - MARGIN)
+    const maxY = 24 - MARGIN
+
+    if (newX < minX) newX = minX
+    if (newX > maxX) newX = maxX
+    if (newY < minY) newY = minY
+    if (newY > maxY) newY = maxY
+
+    setPosition({ x: newX, y: newY })
+  }
+
+  const handlePointerUp = (e) => {
+    setIsDragging(false)
+    e.target.releasePointerCapture(e.pointerId)
+  }
+
+  const handleLauncherClick = () => {
+    if (dragStart.current.moved) {
+      dragStart.current.moved = false
+      return
+    }
+    setIsOpen(!isOpen)
+  }
 
   useEffect(() => {
     fetchChatSuggestions()
@@ -128,12 +201,61 @@ export default function TrialGuardAssistant({ initialOpen = false }) {
     ])
   }
 
+  const BUTTON_WIDTH = 150
+  const BUTTON_HEIGHT = 48
+  const DRAWER_WIDTH = 440
+  const DRAWER_HEIGHT = 620
+
+  const btnBottom = 24 - position.y
+  const btnRight = 28 - position.x
+  const btnTop = windowSize.height - btnBottom - BUTTON_HEIGHT
+  const btnLeft = windowSize.width - btnRight - BUTTON_WIDTH
+
+  let drawerStyle = {
+    position: 'fixed',
+    zIndex: 998,
+    transition: isDragging ? 'none' : 'all 0.1s ease-out'
+  }
+
+  // Y-Axis
+  if (btnTop > DRAWER_HEIGHT + 20) {
+    drawerStyle.bottom = btnBottom + BUTTON_HEIGHT + 16
+    drawerStyle.top = 'auto'
+  } else if (btnBottom > DRAWER_HEIGHT + 20) {
+    drawerStyle.top = btnTop + BUTTON_HEIGHT + 16
+    drawerStyle.bottom = 'auto'
+  } else {
+    drawerStyle.top = 20
+    drawerStyle.bottom = 20
+  }
+
+  // X-Axis
+  if (btnLeft > DRAWER_WIDTH - BUTTON_WIDTH + 20) {
+    drawerStyle.right = btnRight
+    drawerStyle.left = 'auto'
+  } else if (windowSize.width - btnLeft > DRAWER_WIDTH + 20) {
+    drawerStyle.left = btnLeft
+    drawerStyle.right = 'auto'
+  } else {
+    drawerStyle.left = 20
+    drawerStyle.right = 'auto'
+  }
+
   return (
     <>
       {/* Floating Action Button */}
       <button
         className={`tg-assistant-launcher ${isOpen ? 'active' : ''}`}
-        onClick={() => setIsOpen(!isOpen)}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onClick={handleLauncherClick}
+        style={{ 
+          transform: `translate(${position.x}px, ${position.y}px)`, 
+          transition: isDragging ? 'none' : 'transform 0.1s',
+          cursor: isDragging ? 'grabbing' : 'pointer'
+        }}
         aria-label="Toggle TrialGuard Assistant"
         title="Open TrialGuard Assistant"
       >
@@ -144,7 +266,10 @@ export default function TrialGuardAssistant({ initialOpen = false }) {
 
       {/* Floating Chat Drawer */}
       {isOpen && (
-        <div className="tg-assistant-container">
+        <div 
+          className="tg-assistant-container"
+          style={drawerStyle}
+        >
           {/* Header */}
           <div className="tg-assistant-header">
             <div className="tg-header-info">
@@ -156,7 +281,7 @@ export default function TrialGuardAssistant({ initialOpen = false }) {
                 </span>
               </div>
             </div>
-            <div className="tg-header-actions">
+            <div className="tg-header-actions" onPointerDown={(e) => e.stopPropagation()}>
               <button
                 className="tg-icon-btn"
                 onClick={handleClearChat}
@@ -166,7 +291,9 @@ export default function TrialGuardAssistant({ initialOpen = false }) {
               </button>
               <button
                 className="tg-icon-btn"
-                onClick={() => setIsOpen(false)}
+                onClick={() => {
+                  setIsOpen(false)
+                }}
                 title="Close Assistant"
               >
                 ✕
