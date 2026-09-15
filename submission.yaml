@@ -69,7 +69,6 @@ submission:
 
   known_limitations: >
     Uses synthetic data (no real patient records for privacy/compliance reasons).
-    The dashboard is not deployed — runs locally only.
     Risk scoring thresholds are illustrative and would need calibration with
     real trial data before production use.
 

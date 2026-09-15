@@ -1,4 +1,1 @@
-NOT DEPLOYED
-
-The TrialGuard AI dashboard runs locally. See docs/setup-guide.md for instructions.
-Demo video shows the app running on localhost.
+https://trialguardai.vercel.app/
