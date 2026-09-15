@@ -2,15 +2,17 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { sendChatMessage } from '../utils/api'
 
-const QUICK_ACTIONS = [
-  { label: '📊 Trial Summary', message: 'Trial summary' },
-  { label: '🏥 Top Risk Sites', message: 'Top risk sites' },
-  { label: '📋 Protocol Info', message: 'Protocol info' },
-  { label: '⚠️ All Deviations', message: 'Show all deviations' },
+const DEFAULT_SUGGESTIONS = [
+  '📊 Trial Summary',
+  '🏥 Top Risk Sites',
+  '📋 Protocol Info',
+  '⚠️ Show all deviations',
+  '🔍 Risk of SITE-042',
+  '📄 CAPA for SITE-042',
 ]
 
 function formatResponse(text) {
-  // Simple markdown-like formatting for chat display
+  if (!text) return ''
   return text
     .replace(/## (.*)/g, '<h3 class="chat-heading">$1</h3>')
     .replace(/### (.*)/g, '<h4 class="chat-subheading">$1</h4>')
@@ -18,6 +20,7 @@ function formatResponse(text) {
     .replace(/`(.*?)`/g, '<code class="chat-code">$1</code>')
     .replace(/_(.*?)_/g, '<em>$1</em>')
     .replace(/\n• /g, '\n<span class="chat-bullet">•</span> ')
+    .replace(/\n- /g, '\n<span class="chat-bullet">•</span> ')
     .replace(/\n(\d+)\. /g, '\n<span class="chat-bullet">$1.</span> ')
     .replace(/\n/g, '<br/>')
 }
@@ -28,14 +31,15 @@ export default function BobChat() {
     {
       role: 'bot',
       text: '🛡️ **TrialGuard AI — Bob MCP Chatbot**\n\nI look up real data from the PHOENIX-301 trial database. No guesses, no made-up answers — only actual trial data.\n\n**Try asking:**\n• `Show me SITE-042`\n• `Trial summary`\n• `Top risk sites`\n• `Deviations for SITE-015`',
-      type: 'help',
     },
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [hasUnread, setHasUnread] = useState(false)
+  const [suggestions, setSuggestions] = useState(DEFAULT_SUGGESTIONS)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
+  const suggestionsRef = useRef(null)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -59,17 +63,27 @@ export default function BobChat() {
 
     try {
       const result = await sendChatMessage(text)
+      // Backend returns: { reply, tool_used, suggestions, site_id }
       setMessages((prev) => [
         ...prev,
-        { role: 'bot', text: result.response, type: result.type, data: result.data },
+        {
+          role: 'bot',
+          text: result.reply || result.response || 'No response received.',
+          toolUsed: result.tool_used || null,
+          siteId: result.site_id || null,
+        },
       ])
+      // Update dynamic suggestions from backend
+      if (result.suggestions && result.suggestions.length > 0) {
+        setSuggestions(result.suggestions)
+      }
     } catch {
       setMessages((prev) => [
         ...prev,
         {
           role: 'bot',
           text: '❌ Could not reach the server. Make sure the backend is running on port 8080.',
-          type: 'error',
+          isError: true,
         },
       ])
     } finally {
@@ -84,15 +98,14 @@ export default function BobChat() {
     }
   }
 
-  function handleNavigate(data, type) {
-    if (!data) return
-    if (type === 'site_detail' || type === 'site_risk' || type === 'site_deviations') {
-      navigate(`/sites/${data.site_id}`)
-      setIsOpen(false)
-    } else if (type === 'capa_report') {
-      navigate(`/capa/${data.site_id}`)
-      setIsOpen(false)
+  function handleNavigate(siteId, target) {
+    if (!siteId) return
+    if (target === 'capa') {
+      navigate(`/capa/${siteId}`)
+    } else {
+      navigate(`/sites/${siteId}`)
     }
+    setIsOpen(false)
   }
 
   return (
@@ -139,15 +152,31 @@ export default function BobChat() {
                 {msg.role === 'bot' && (
                   <div className="bob-chat-msg-avatar">🛡️</div>
                 )}
-                <div className={`bob-chat-bubble ${msg.role} ${msg.type === 'error' || msg.type === 'not_found' ? 'error' : ''} ${msg.type === 'unknown' ? 'unknown' : ''}`}>
+                <div className={`bob-chat-bubble ${msg.role} ${msg.isError ? 'error' : ''}`}>
+                  {/* MCP Tool Badge */}
+                  {msg.toolUsed && (
+                    <div className="bob-chat-tool-badge">
+                      <span>⚡</span>
+                      <span>MCP Tool: <strong>{msg.toolUsed}</strong></span>
+                    </div>
+                  )}
                   <div dangerouslySetInnerHTML={{ __html: formatResponse(msg.text) }} />
-                  {msg.data && (msg.type === 'site_detail' || msg.type === 'site_risk' || msg.type === 'site_deviations' || msg.type === 'capa_report') && (
-                    <button
-                      className="bob-chat-link-btn"
-                      onClick={() => handleNavigate(msg.data, msg.type)}
-                    >
-                      View in Dashboard →
-                    </button>
+                  {/* Site navigation buttons */}
+                  {msg.siteId && (
+                    <div className="bob-chat-site-actions">
+                      <button
+                        className="bob-chat-link-btn"
+                        onClick={() => handleNavigate(msg.siteId, 'site')}
+                      >
+                        🏥 View {msg.siteId} →
+                      </button>
+                      <button
+                        className="bob-chat-link-btn"
+                        onClick={() => handleNavigate(msg.siteId, 'capa')}
+                      >
+                        📋 CAPA Report →
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -165,21 +194,19 @@ export default function BobChat() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Quick Actions */}
-          {messages.length <= 2 && (
-            <div className="bob-chat-quick-actions">
-              {QUICK_ACTIONS.map((qa) => (
-                <button
-                  key={qa.message}
-                  className="bob-chat-quick-btn"
-                  onClick={() => handleSend(qa.message)}
-                  disabled={loading}
-                >
-                  {qa.label}
-                </button>
-              ))}
-            </div>
-          )}
+          {/* Dynamic Suggestions — always visible, scrollable */}
+          <div className="bob-chat-suggestions-bar" ref={suggestionsRef}>
+            {suggestions.map((s, i) => (
+              <button
+                key={i}
+                className="bob-chat-quick-btn"
+                onClick={() => handleSend(s.replace(/^[^\w]*/, ''))}
+                disabled={loading}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
 
           {/* Input */}
           <div className="bob-chat-input-bar">
@@ -187,7 +214,7 @@ export default function BobChat() {
               ref={inputRef}
               className="bob-chat-input"
               type="text"
-              placeholder="Ask about a site, patient, or deviation..."
+              placeholder="Ask about site risk, deviations, CAPA..."
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}

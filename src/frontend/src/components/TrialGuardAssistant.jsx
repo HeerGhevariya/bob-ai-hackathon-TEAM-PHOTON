@@ -177,7 +177,7 @@ export default function TrialGuardAssistant({ initialOpen = false }) {
           {/* Quick suggestions banner */}
           {activeSuggestions.length > 0 && (
             <div className="tg-quick-suggestions">
-              {activeSuggestions.slice(0, 3).map((sug, i) => (
+              {activeSuggestions.map((sug, i) => (
                 <button
                   key={i}
                   className="tg-suggestion-chip"
