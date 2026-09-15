@@ -8,14 +8,33 @@ import DeviationExplorer from './components/DeviationExplorer'
 import CapaReport from './components/CapaReport'
 import TrialGuardAssistant from './components/TrialGuardAssistant'
 import GlobalMcpChat from './components/GlobalMcpChat'
+import LoginPage from './components/LoginPage'
+import { isAuthenticated, getUser } from './utils/auth'
 
 export default function App() {
   const [selectedSiteId, setSelectedSiteId] = useState(null)
   const [capaReportSiteId, setCapaReportSiteId] = useState(null)
+  // Auth state — initialised from localStorage so page refresh keeps you logged in
+  const [authed, setAuthed] = useState(() => isAuthenticated())
+  const [currentUser, setCurrentUser] = useState(() => getUser())
+
+  const handleAuthenticated = (user) => {
+    setCurrentUser(user)
+    setAuthed(true)
+  }
+
+  const handleLogout = () => {
+    setAuthed(false)
+    setCurrentUser(null)
+  }
+
+  if (!authed) {
+    return <LoginPage onAuthenticated={handleAuthenticated} />
+  }
 
   return (
     <div className="app-layout">
-      <Sidebar />
+      <Sidebar user={currentUser} onLogout={handleLogout} />
       <main className="main-content">
         <Routes>
           <Route path="/" element={<TrialOverview />} />

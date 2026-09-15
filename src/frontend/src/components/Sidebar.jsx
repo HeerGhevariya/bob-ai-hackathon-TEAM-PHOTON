@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, NavLink, useLocation } from 'react-router-dom'
 import ThemeToggle from './ThemeToggle'
 import { fetchMcpStatus } from '../utils/api'
+import { logout } from '../utils/auth'
 
 const navItems = [
   { path: '/', icon: '📊', label: 'Trial Overview' },
@@ -10,7 +11,7 @@ const navItems = [
   { path: '/capa', icon: '📋', label: 'CAPA Reports' },
 ]
 
-export default function Sidebar() {
+export default function Sidebar({ user, onLogout }) {
   const location = useLocation()
   const navigate = useNavigate()
   const [mcpState, setMcpState] = useState({
@@ -134,9 +135,37 @@ export default function Sidebar() {
 
       <ThemeToggle />
 
+      {/* User profile + logout */}
+      {user && (
+        <div className="sidebar-user">
+          <div className="sidebar-user-avatar">
+            {(user.full_name || user.email || 'U')
+              .split(' ')
+              .map((n) => n[0])
+              .slice(0, 2)
+              .join('')
+              .toUpperCase()}
+          </div>
+          <div className="sidebar-user-info">
+            <div className="sidebar-user-name">{user.full_name || user.email}</div>
+            <div className="sidebar-user-role">{user.role}</div>
+          </div>
+          <button
+            id="btn-logout"
+            className="sidebar-logout-btn"
+            title="Sign out"
+            onClick={() => {
+              logout()
+              onLogout && onLogout()
+            }}
+          >
+            ↩
+          </button>
+        </div>
+      )}
+
       <div style={{
-        padding: '16px 20px',
-        borderTop: '1px solid var(--border)',
+        padding: '10px 20px 16px',
         fontSize: 11,
         color: 'var(--text-muted)'
       }}>
