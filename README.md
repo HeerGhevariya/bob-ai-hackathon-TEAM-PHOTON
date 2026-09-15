@@ -154,7 +154,7 @@ python main.py
 
 - **Synthetic data only** — uses generated patient records (no real PHI for privacy/compliance)
 - **watsonx.ai is optional** — IBM watsonx.ai (Granite) integration is implemented with graceful degradation; when `WATSONX_API_KEY` is not configured, CAPA narratives fall back to deterministic templates automatically
-- **Not deployed** — dashboard runs locally only
+- **Live demo available** — dashboard is deployed at [trialguardai.vercel.app](https://trialguardai.vercel.app/) (use `demo@trialgard.ai` / `Demo@2026`)
 - **Risk scoring thresholds are illustrative** — would need calibration with real trial data before production use
 - **Single-protocol demo** — demonstrates with one trial (PHOENIX-301); production would support multiple protocols
 

@@ -75,7 +75,7 @@ graph TD
 
 3. **Classification:** Each detected deviation is auto-classified by ICH E6(R2) severity using codified thresholds (e.g., >30 days late = Major, 7–30 days = Minor, <7 days = Administrative).
 
-4. **Risk scoring:** Sites are scored 0–100 using a composite of severity-weighted deviation count, trend direction, repetition patterns, and recency bias. Scores are bucketed into tiers: Critical (80+), High (60–79), Medium (40–59), Low (0–39).
+4. **Risk scoring:** Sites are scored 0–100 using a composite of severity-weighted deviation count, trend direction, repetition patterns, and recency bias. Scores are bucketed into tiers: Critical (75–100), High (50–74), Medium (25–49), Low (0–24).
 
 5. **Persistence (Supabase path):** When using SupabaseDataSource, all computed results (deviations, risk profiles) are stored in PostgreSQL via Supabase, enabling persistence across restarts and team collaboration.
 
