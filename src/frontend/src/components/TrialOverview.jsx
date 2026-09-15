@@ -9,8 +9,10 @@ export default function TrialOverview() {
   const [summary, setSummary] = useState(null)
   const [trends, setTrends] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [currentPage, setCurrentPage] = useState(1)
   const navigate = useNavigate()
   const ct = useChartTheme()
+  const ITEMS_PER_PAGE = 5
 
   useEffect(() => {
     Promise.all([fetchTrialSummary(), fetchTrends()])
@@ -23,6 +25,12 @@ export default function TrialOverview() {
   if (!summary) return <div className="loading">Failed to load data.</div>
 
   const { overview, deviations, risk_distribution, alerts, trial } = summary
+
+  const totalPages = Math.ceil((alerts?.critical_sites?.length || 0) / ITEMS_PER_PAGE)
+  const paginatedSites = alerts?.critical_sites?.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  ) || []
 
   return (
     <div>
@@ -121,7 +129,7 @@ export default function TrialOverview() {
               </tr>
             </thead>
             <tbody>
-              {alerts.critical_sites.map((site) => (
+              {paginatedSites.map((site) => (
                 <tr key={site.site_id} onClick={() => navigate(`/sites/${site.site_id}`)}>
                   <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{site.site_id}</td>
                   <td>{site.site_name}</td>
@@ -140,6 +148,29 @@ export default function TrialOverview() {
               ))}
             </tbody>
           </table>
+          {totalPages > 1 && (
+            <div className="pagination">
+              <div className="pagination-info">
+                Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, alerts.critical_sites.length)} of {alerts.critical_sites.length} sites
+              </div>
+              <div className="pagination-buttons">
+                <button
+                  className="btn btn-ghost"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                >
+                  Previous
+                </button>
+                <button
+                  className="btn btn-ghost"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
