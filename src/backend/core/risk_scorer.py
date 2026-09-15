@@ -5,15 +5,23 @@ Scores each clinical trial site using composite leading indicators that
 predict future non-compliance, not just tally past problems.
 
 Scoring factors:
-1. Severity-weighted deviation count
+1. Severity-weighted deviation count (normalised per patient)
 2. Trend direction (rising = higher risk)
 3. Repetition of same deviation type (systemic issue signal)
 4. Recency bias (recent deviations weigh more)
 
+Final score: 100 * (1 - e^(-k * composite_rate)), a saturating function
+that avoids the hard-cap clustering problem.  Tuned so that:
+  - Low-risk sites (0-1 weighted pts/patient)    →  0-15
+  - Medium-risk sites (~3-5 weighted pts/patient) →  25-50
+  - High-risk sites  (~8-12 pts/patient)          →  50-70
+  - Critical sites   (15+ pts/patient + bonuses)  →  75-95+
+
 Produces a 0-100 risk score per site, bucketed into tiers:
-  Critical (80-100), High (60-79), Medium (40-59), Low (0-39)
+  Critical (75-100), High (50-74), Medium (25-49), Low (0-24)
 """
 
+import math
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -23,35 +31,54 @@ from .protocol import DeviationType, RiskTier, Severity, TrendDirection
 from .deviation_detector import Deviation
 
 
-# Severity weights — a major counts 10x an administrative
+# Severity weights — recalibrated so a single major deviation per patient
+# contributes ~5 raw pts, keeping scores well below the saturation ceiling
+# unless the site is genuinely extreme.
+#
+# Old weights (10 / 3 / 1) caused even small sites to exceed 100 before
+# bonuses, so min(score, 100) flattened everything into Critical.
+# New weights (5 / 2 / 0.8) give meaningful spread across the full 0-100 range.
 SEVERITY_WEIGHTS = {
-    Severity.MAJOR.value: 10.0,
-    Severity.MINOR.value: 3.0,
-    Severity.ADMINISTRATIVE.value: 1.0,
-    "major": 10.0,
-    "minor": 3.0,
-    "administrative": 1.0,
+    Severity.MAJOR.value: 5.0,
+    Severity.MINOR.value: 2.0,
+    Severity.ADMINISTRATIVE.value: 0.8,
+    "major": 5.0,
+    "minor": 2.0,
+    "administrative": 0.8,
 }
 
-# Risk tier thresholds
+# Risk tier thresholds — recalibrated to match the new saturating score
+# distribution (old thresholds were 80/60/40 but the new formula compresses
+# extreme values, so the tiers need to shift down accordingly).
 TIER_THRESHOLDS = {
-    RiskTier.CRITICAL: 80,
-    RiskTier.HIGH: 60,
-    RiskTier.MEDIUM: 40,
+    RiskTier.CRITICAL: 75,
+    RiskTier.HIGH: 50,
+    RiskTier.MEDIUM: 25,
     RiskTier.LOW: 0,
 }
 
-# Repetition penalty — same deviation type occurring 3+ times
+# Saturation constant for the exponential scoring function.
+# final_score = 100 * (1 - e^(-SCORE_K * composite_rate))
+# k=0.08 means:
+#   rate=5  → score≈33   (medium risk)
+#   rate=10 → score≈55   (high risk)
+#   rate=20 → score≈80   (critical risk)
+#   rate=30 → score≈91   (very critical)
+SCORE_K = 0.08
+
+# Repetition penalty — same deviation type occurring 3+ times signals systemic
+# training or process failure.  Added as bonus rate pts (not raw score pts)
+# so it feeds the saturating function correctly.
 REPETITION_THRESHOLD = 3
-REPETITION_MULTIPLIER = 1.5
+REPETITION_RATE_BONUS = 3.0   # extra rate pts per repeated deviation type
 
 # Trend detection window
 TREND_WINDOW_DAYS = 60
 TREND_RISING_MULTIPLIER = 1.3
 
-# Recency decay — deviations in last 30 days get 2x weight
+# Recency bias — deviations in the last 30 days signal active, ongoing problems.
 RECENCY_WINDOW_DAYS = 30
-RECENCY_MULTIPLIER = 2.0
+RECENCY_RATE_FACTOR = 2.5     # multiplier applied to recent deviation rate
 
 
 @dataclass
@@ -149,7 +176,11 @@ class RiskScorer:
                 total_patients=site_info.get("total_patients", 0),
             )
 
-        # --- Factor 1: Severity-weighted deviation count ---
+        # --- Factor 1: Severity-weighted deviation rate (per patient) ---
+        #
+        # We compute a *rate* (weighted_sum / total_patients) rather than a raw
+        # count.  This normalises for site size and feeds the saturating function
+        # below instead of a hard min(score, 100) cap.
         severity_counts = Counter(d.severity for d in deviations)
         major_count = severity_counts.get("major", 0)
         minor_count = severity_counts.get("minor", 0)
@@ -159,31 +190,35 @@ class RiskScorer:
             SEVERITY_WEIGHTS.get(d.severity, 1.0) for d in deviations
         )
 
-        # Normalize by patient count to avoid penalizing large sites
+        # Normalize by patient count to avoid penalising large sites
         total_patients = max(site_info.get("total_patients", 1), 1)
-        base_score = (weighted_sum / total_patients) * 10
+        base_rate = weighted_sum / total_patients  # pts-per-patient (unbounded)
 
         risk_factors = [
             RiskFactor(
                 factor_name="Severity-Weighted Deviation Rate",
                 description=(
                     f"{len(deviations)} deviations across {total_patients} patients "
-                    f"(weighted sum: {weighted_sum:.1f})"
+                    f"(weighted sum: {weighted_sum:.1f}, rate: {base_rate:.2f} pts/patient)"
                 ),
-                contribution=base_score,
+                contribution=base_rate,
             )
         ]
 
         # --- Factor 2: Repetition penalty ---
+        #
+        # Same deviation type recurring 3+ times signals a systemic process or
+        # training failure.  Expressed as additional *rate* points so it feeds
+        # the saturating function alongside the base rate.
         type_counts = Counter(d.deviation_type.value for d in deviations)
         repeat_types = [
             dtype for dtype, count in type_counts.items()
             if count >= REPETITION_THRESHOLD
         ]
 
-        repetition_bonus = 0.0
+        repetition_rate_bonus = 0.0
         if repeat_types:
-            repetition_bonus = len(repeat_types) * 8.0
+            repetition_rate_bonus = len(repeat_types) * REPETITION_RATE_BONUS
             risk_factors.append(RiskFactor(
                 factor_name="Repeat Deviation Pattern",
                 description=(
@@ -191,51 +226,70 @@ class RiskScorer:
                     f"{REPETITION_THRESHOLD}+ times: {', '.join(repeat_types)}. "
                     f"This suggests systemic training or process issues."
                 ),
-                contribution=repetition_bonus,
+                contribution=repetition_rate_bonus,
                 severity="warning"
             ))
 
         # --- Factor 3: Recency bias ---
+        #
+        # Recent deviations are weighted by RECENCY_RATE_FACTOR relative to the
+        # overall rate.  We add only the *incremental* boost above the baseline
+        # already captured in base_rate.
         recent_cutoff = self.reference_date - timedelta(days=RECENCY_WINDOW_DAYS)
         recent_devs = [
             d for d in deviations
             if d.detected_date and d.detected_date >= recent_cutoff
         ]
-        recency_bonus = 0.0
+        recency_rate_bonus = 0.0
         if recent_devs:
             recent_weighted = sum(
                 SEVERITY_WEIGHTS.get(d.severity, 1.0) for d in recent_devs
             )
-            recency_bonus = (recent_weighted / total_patients) * 5
+            # Extra rate contribution from recency amplification (factor - 1 to
+            # avoid double-counting the base rate for recent deviations).
+            recency_rate_bonus = (
+                (recent_weighted / total_patients) * (RECENCY_RATE_FACTOR - 1.0)
+            )
             risk_factors.append(RiskFactor(
                 factor_name="Recent Activity (Last 30 Days)",
                 description=(
                     f"{len(recent_devs)} deviations in the last 30 days "
                     f"(weighted: {recent_weighted:.1f})"
                 ),
-                contribution=recency_bonus,
+                contribution=recency_rate_bonus,
             ))
 
         # --- Factor 4: Trend direction ---
+        #
+        # Rising trend adds a flat rate boost rather than a flat score boost,
+        # so it integrates cleanly with the saturating function.
         trend = self._detect_trend(deviations)
-        trend_bonus = 0.0
+        trend_rate_bonus = 0.0
         if trend == TrendDirection.RISING:
-            trend_bonus = 12.0
+            trend_rate_bonus = 8.0
             risk_factors.append(RiskFactor(
                 factor_name="Rising Trend",
                 description=(
                     "Deviation rate is increasing over the last "
                     f"{TREND_WINDOW_DAYS} days — this site is getting worse."
                 ),
-                contribution=trend_bonus,
+                contribution=trend_rate_bonus,
                 severity="critical"
             ))
 
-        # --- Composite score ---
-        raw_score = base_score + repetition_bonus + recency_bonus + trend_bonus
-
-        # Clamp to 0-100
-        risk_score = min(100.0, max(0.0, raw_score))
+        # --- Composite saturating score ---
+        #
+        # FIX: Instead of a hard min(raw_sum, 100) cap (which caused every site
+        # with >10 weighted pts/patient to score exactly 100), we pass the
+        # composite *rate* through a saturating exponential:
+        #
+        #   score = 100 * (1 - e^(-k * composite_rate))
+        #
+        # This maps [0, ∞) → [0, 100) smoothly, so genuinely extreme sites
+        # approach 100 asymptotically while low/medium sites get proportionally
+        # lower scores, giving meaningful spread across all tiers.
+        composite_rate = base_rate + repetition_rate_bonus + recency_rate_bonus + trend_rate_bonus
+        risk_score = 100.0 * (1.0 - math.exp(-SCORE_K * composite_rate))
 
         # Determine tier
         risk_tier = self._get_tier(risk_score)

@@ -308,37 +308,25 @@ class SupabaseDataSource(DataSource):
             )
             self._deviations_cache.append(dev)
 
-        # Load risk profiles
-        profiles_data: list[dict[str, Any]] = cast(list[dict[str, Any]], self._client.table("site_risk_profiles").select("*").order("risk_score", desc=True).execute().data or [])
-        from .protocol import RiskTier, TrendDirection
-        from .risk_scorer import RiskFactor
-        self._profiles_cache = []
-        for rp in profiles_data:
-            factors = []
-            for rf_data in (rp.get("top_risk_factors") or []):
-                factors.append(RiskFactor(
-                    factor_name=rf_data.get("factor_name", ""),
-                    description=rf_data.get("description", ""),
-                    contribution=rf_data.get("contribution", 0),
-                ))
-            profile = SiteRiskProfile(
-                site_id=rp["site_id"],
-                site_name=rp["site_name"],
-                risk_score=rp["risk_score"],
-                risk_tier=RiskTier(rp["risk_tier"]),
-                trend_direction=TrendDirection(rp["trend_direction"]),
-                total_deviations=rp["total_deviations"],
-                major_count=rp["major_count"],
-                minor_count=rp["minor_count"],
-                administrative_count=rp["administrative_count"],
-                top_risk_factors=factors,
-                deviation_types=rp.get("deviation_types", {}),
-                patients_affected=rp.get("patients_affected", 0),
-                total_patients=rp.get("total_patients", 0),
-                recent_deviations_30d=rp.get("recent_deviations_30d", 0),
-                repeat_deviation_types=rp.get("repeat_deviation_types", []) or [],
-            )
-            self._profiles_cache.append(profile)
+        # Re-compute risk profiles from live deviation data using the current
+        # RiskScorer.  We intentionally do NOT read risk_score/risk_tier from the
+        # site_risk_profiles table, because that table may contain stale values
+        # computed by an older version of the scoring formula.  By re-scoring here
+        # we guarantee that any change to risk_scorer.py takes effect immediately
+        # on the next server restart — no re-seed required.
+        #
+        # The site_risk_profiles table is still used by seed.py for persistence
+        # (and for the initial DB load in older deployments), but the live API
+        # always uses freshly computed scores.
+        print("   🔄 Re-computing risk scores from live deviations (bypasses stale DB values)...")
+        scorer = RiskScorer(reference_date=date(2024, 9, 1))
+        site_info_for_scoring = {
+            s.site_id: {"name": s.site_name, "total_patients": len(s.patients)}
+            for s in self._sites_cache
+        }
+        self._profiles_cache = scorer.score_all_sites(
+            self._deviations_cache, site_info_for_scoring
+        )
 
         self._profile_map = {rp.site_id: rp for rp in self._profiles_cache}
 
