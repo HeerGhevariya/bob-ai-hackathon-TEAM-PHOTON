@@ -7,6 +7,7 @@ import SiteDetail from './components/SiteDetail'
 import DeviationExplorer from './components/DeviationExplorer'
 import CapaReport from './components/CapaReport'
 import TrialGuardAssistant from './components/TrialGuardAssistant'
+import GlobalMcpChat from './components/GlobalMcpChat'
 
 export default function App() {
   const [selectedSiteId, setSelectedSiteId] = useState(null)
@@ -18,6 +19,7 @@ export default function App() {
       <main className="main-content">
         <Routes>
           <Route path="/" element={<TrialOverview />} />
+          <Route path="/chat" element={<GlobalMcpChat />} />
           <Route
             path="/sites"
             element={

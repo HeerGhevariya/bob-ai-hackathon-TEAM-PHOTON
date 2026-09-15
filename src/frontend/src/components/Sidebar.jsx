@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { useNavigate, NavLink, useLocation } from 'react-router-dom'
 import ThemeToggle from './ThemeToggle'
 import { fetchMcpStatus } from '../utils/api'
 
@@ -12,6 +12,7 @@ const navItems = [
 
 export default function Sidebar() {
   const location = useLocation()
+  const navigate = useNavigate()
   const [mcpState, setMcpState] = useState({
     status: 'connecting', // 'connected' | 'offline' | 'connecting'
     toolCount: 0,
@@ -76,12 +77,18 @@ export default function Sidebar() {
         ))}
 
         <div className="sidebar-section-label" style={{ marginTop: 24 }}>IBM Bob Integration</div>
-        <div className="sidebar-info" style={{ justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <NavLink
+          to="/chat"
+          className={({ isActive }) =>
+            `sidebar-link ${isActive ? 'active' : ''}`
+          }
+          style={{ justifyContent: 'space-between' }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span className="link-icon">
               {mcpState.status === 'connected' ? '🟢' : mcpState.status === 'connecting' ? '🟡' : '🔴'}
             </span>
-            <span style={{ fontSize: 12, fontWeight: 500 }}>
+            <span>
               {mcpState.status === 'connected'
                 ? 'MCP Server Connected'
                 : mcpState.status === 'connecting'
@@ -112,7 +119,7 @@ export default function Sidebar() {
               ? 'CONNECTING'
               : 'OFFLINE'}
           </span>
-        </div>
+        </NavLink>
 
         <div className="sidebar-section-label" style={{ marginTop: 24 }}>Protocol</div>
         <div className="sidebar-info">
