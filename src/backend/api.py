@@ -39,11 +39,23 @@ from mcp_client_service import get_mcp_manager, get_mcp_status
 
 # ─── Auth helpers ─────────────────────────────────────────────────
 try:
-    from jose import jwt, JWTError
-    import bcrypt as _bcrypt_lib
-    _AUTH_AVAILABLE = True
+    import jwt
+    from jwt import PyJWTError as JWTError
+    _JWT_LIB = 'pyjwt'
 except ImportError:
-    _AUTH_AVAILABLE = False
+    try:
+        from jose import jwt, JWTError
+        _JWT_LIB = 'jose'
+    except ImportError:
+        _JWT_LIB = None
+
+try:
+    import bcrypt as _bcrypt_lib
+    _BCRYPT_AVAILABLE = True
+except ImportError:
+    _BCRYPT_AVAILABLE = False
+
+_AUTH_AVAILABLE = bool(_JWT_LIB)
 
 _JWT_SECRET = os.getenv("JWT_SECRET", "trialgard-hackathon-secret-2026")
 _JWT_ALGORITHM = "HS256"
@@ -51,13 +63,26 @@ _JWT_EXPIRE_HOURS = 24
 
 
 def _hash_password(plain: str) -> str:
-    """Hash a plaintext password with bcrypt."""
-    return _bcrypt_lib.hashpw(plain.encode("utf-8"), _bcrypt_lib.gensalt()).decode("utf-8")
+    """Hash a plaintext password with bcrypt (or sha256 fallback)."""
+    if _BCRYPT_AVAILABLE:
+        return _bcrypt_lib.hashpw(plain.encode("utf-8"), _bcrypt_lib.gensalt()).decode("utf-8")
+    else:
+        import hashlib
+        return hashlib.sha256(plain.encode("utf-8")).hexdigest()
 
 
 def _verify_password(plain: str, hashed: str) -> bool:
-    """Verify a plaintext password against a bcrypt hash."""
-    return _bcrypt_lib.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+    """Verify a plaintext password against a hash."""
+    if _BCRYPT_AVAILABLE:
+        try:
+            return _bcrypt_lib.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+        except ValueError:
+            # Fallback if the hash stored was sha256
+            import hashlib
+            return hashlib.sha256(plain.encode("utf-8")).hexdigest() == hashed
+    else:
+        import hashlib
+        return hashlib.sha256(plain.encode("utf-8")).hexdigest() == hashed
 
 
 _bearer = HTTPBearer(auto_error=False)
