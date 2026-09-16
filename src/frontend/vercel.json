@@ -3,6 +3,10 @@
     {
       "source": "/api/:path*",
       "destination": "https://backend-self-phi-11.vercel.app/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
