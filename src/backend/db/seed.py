@@ -191,44 +191,47 @@ def main():
 
     # ─── Seed Demo Users ────────────────────────────────────────────
     print("\n👤 Seeding demo user accounts...")
-    try:
-        import bcrypt as _bcrypt
+    
+    def _hash_pw(plain: str) -> str:
+        # Force sha256 to guarantee compatibility with Vercel serverless
+        # environments where the bcrypt C-extension fails to load.
+        import hashlib
+        return hashlib.sha256(plain.encode("utf-8")).hexdigest()
 
-        def _hash_pw(plain: str) -> str:
-            return _bcrypt.hashpw(plain.encode("utf-8"), _bcrypt.gensalt()).decode("utf-8")
+    demo_users = [
+        {
+            "email": "demo@trialgard.ai",
+            "full_name": "Demo User",
+            "role": "judge",
+            "password_hash": _hash_pw("Demo@2026"),
+        },
+        {
+            "email": "judge@trialgard.ai",
+            "full_name": "Judge Evaluator",
+            "role": "judge",
+            "password_hash": _hash_pw("Demo@2026"),
+        },
+        {
+            "email": "reviewer@trialgard.ai",
+            "full_name": "Clinical Reviewer",
+            "role": "reviewer",
+            "password_hash": _hash_pw("Demo@2026"),
+        },
+        {
+            "email": "admin@trialgard.ai",
+            "full_name": "Trial Administrator",
+            "role": "admin",
+            "password_hash": _hash_pw("Demo@2026"),
+        },
+    ]
 
-        demo_users = [
-            {
-                "email": "demo@trialgard.ai",
-                "full_name": "Demo User",
-                "role": "judge",
-                "password_hash": _hash_pw("Demo@2026"),
-            },
-            {
-                "email": "reviewer@trialgard.ai",
-                "full_name": "Clinical Reviewer",
-                "role": "reviewer",
-                "password_hash": _hash_pw("Demo@2026"),
-            },
-            {
-                "email": "admin@trialgard.ai",
-                "full_name": "Trial Administrator",
-                "role": "admin",
-                "password_hash": _hash_pw("Demo@2026"),
-            },
-        ]
-
-        for user in demo_users:
-            try:
-                # Upsert by email so re-running seed doesn't fail on duplicate
-                client.table("users").upsert(user, on_conflict="email").execute()
-                print(f"   ✅ {user['role']}: {user['email']}")
-            except Exception as e:
-                print(f"   ⚠️  Could not seed user {user['email']}: {e}")
-
-    except ImportError:
-        print("   ⚠️  bcrypt not installed — skipping demo user seeding.")
-        print("       Run: pip install bcrypt")
+    for user in demo_users:
+        try:
+            # Upsert by email so re-running seed doesn't fail on duplicate
+            client.table("users").upsert(user, on_conflict="email").execute()
+            print(f"   ✅ {user['role']}: {user['email']}")
+        except Exception as e:
+            print(f"   ⚠️  Could not seed user {user['email']}: {e}")
 
     print("\n" + "=" * 50)
     print("🎉 Seed complete! All data loaded into Supabase.")
