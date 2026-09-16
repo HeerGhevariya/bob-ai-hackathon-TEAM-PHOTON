@@ -202,7 +202,7 @@ def main():
         {
             "email": "demo@trialgard.ai",
             "full_name": "Demo User",
-            "role": "judge",
+            "role": "admin",
             "password_hash": _hash_pw("Demo@2026"),
         },
         {

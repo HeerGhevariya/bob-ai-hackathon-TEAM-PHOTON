@@ -101,7 +101,7 @@ if _AUTH_AVAILABLE:
             "id": "demo-judge-001",
             "email": "demo@trialgard.ai",
             "full_name": "Demo User",
-            "role": "judge",
+            "role": "admin",
             "password_hash": _demo_hash,
         },
         "reviewer@trialgard.ai": {
