@@ -178,7 +178,6 @@ body {
 
 @media (max-width: 1024px) {
   .main-content {
-    margin-left: 0;
     padding: 20px;
   }
 }
@@ -450,6 +449,11 @@ body {
 }
 
 /* ─── Tables ─────────────────────────────────────── */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+}
+
 .data-table {
   width: 100%;
   border-collapse: collapse;
@@ -747,6 +751,8 @@ body {
   border-collapse: collapse;
   margin: 12px 0;
   font-size: 13px;
+  display: block;
+  overflow-x: auto;
 }
 
 .capa-report th {

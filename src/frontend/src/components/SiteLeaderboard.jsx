@@ -46,6 +46,7 @@ export default function SiteLeaderboard() {
       ) : (
         <>
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div className="table-responsive">
             <table className="data-table">
               <thead>
                 <tr>
@@ -113,6 +114,7 @@ export default function SiteLeaderboard() {
                 ))}
               </tbody>
             </table>
+          </div>
           </div>
 
           <div className="pagination">

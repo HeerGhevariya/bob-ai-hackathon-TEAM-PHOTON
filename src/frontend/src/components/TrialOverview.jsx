@@ -119,35 +119,37 @@ export default function TrialOverview() {
           <div className="chart-title" style={{ color: 'var(--severity-major)' }}>
             ⚠️ Critical Site Alerts
           </div>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Site ID</th>
-                <th>Site Name</th>
-                <th>Risk Score</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedSites.map((site) => (
-                <tr key={site.site_id} onClick={() => navigate(`/sites/${site.site_id}`)}>
-                  <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{site.site_id}</td>
-                  <td>{site.site_name}</td>
-                  <td>
-                    <span style={{ color: 'var(--severity-major)', fontWeight: 700 }}>
-                      {site.risk_score}/100
-                    </span>
-                  </td>
-                  <td>
-                    <button className="btn btn-ghost" style={{ padding: '6px 14px', fontSize: 12 }}
-                      onClick={(e) => { e.stopPropagation(); navigate(`/capa/${site.site_id}`) }}>
-                      📋 Generate CAPA
-                    </button>
-                  </td>
+          <div className="table-responsive">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Site ID</th>
+                  <th>Site Name</th>
+                  <th>Risk Score</th>
+                  <th>Action</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {paginatedSites.map((site) => (
+                  <tr key={site.site_id} onClick={() => navigate(`/sites/${site.site_id}`)}>
+                    <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{site.site_id}</td>
+                    <td>{site.site_name}</td>
+                    <td>
+                      <span style={{ color: 'var(--severity-major)', fontWeight: 700 }}>
+                        {site.risk_score}/100
+                      </span>
+                    </td>
+                    <td>
+                      <button className="btn btn-ghost" style={{ padding: '6px 14px', fontSize: 12 }}
+                        onClick={(e) => { e.stopPropagation(); navigate(`/capa/${site.site_id}`) }}>
+                        📋 Generate CAPA
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           {totalPages > 1 && (
             <div className="pagination">
               <div className="pagination-info">

@@ -144,38 +144,40 @@ export default function SiteDetail() {
             Deviation History ({deviations.length} total)
           </div>
         </div>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Patient</th>
-              <th>Visit</th>
-              <th>Type</th>
-              <th>Severity</th>
-              <th>Date</th>
-              <th>Description</th>
-            </tr>
-          </thead>
-          <tbody>
-            {deviations.slice(0, 20).map((d) => (
-              <tr key={d.deviation_id}>
-                <td style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{d.deviation_id}</td>
-                <td style={{ fontWeight: 500 }}>{d.patient_id}</td>
-                <td>{d.visit_name}</td>
-                <td>{d.deviation_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</td>
-                <td>
-                  <span className={`badge badge-${d.severity}`}>
-                    {d.severity === 'major' ? '🔴' : d.severity === 'minor' ? '🟡' : '🔵'} {d.severity}
-                  </span>
-                </td>
-                <td style={{ whiteSpace: 'nowrap' }}>{d.detected_date || 'N/A'}</td>
-                <td style={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {d.description}
-                </td>
+        <div className="table-responsive">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Patient</th>
+                <th>Visit</th>
+                <th>Type</th>
+                <th>Severity</th>
+                <th>Date</th>
+                <th>Description</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {deviations.slice(0, 20).map((d) => (
+                <tr key={d.deviation_id}>
+                  <td style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{d.deviation_id}</td>
+                  <td style={{ fontWeight: 500 }}>{d.patient_id}</td>
+                  <td>{d.visit_name}</td>
+                  <td>{d.deviation_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</td>
+                  <td>
+                    <span className={`badge badge-${d.severity}`}>
+                      {d.severity === 'major' ? '🔴' : d.severity === 'minor' ? '🟡' : '🔵'} {d.severity}
+                    </span>
+                  </td>
+                  <td style={{ whiteSpace: 'nowrap' }}>{d.detected_date || '—'}</td>
+                  <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12 }}>
+                    Expected {d.expected_value}, got {d.actual_value}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         {deviations.length > 20 && (
           <div style={{ padding: '12px 24px', color: 'var(--text-muted)', fontSize: 12, borderTop: '1px solid var(--border)' }}>
             Showing 20 of {deviations.length} deviations.
