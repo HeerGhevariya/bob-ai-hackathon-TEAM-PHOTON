@@ -2466,4 +2466,117 @@ body {
 .sidebar-logout-btn:hover {
   color: #e74c3c;
   background: rgba(231,76,60,0.08);
-}
+}
+
+/* ─── PRINT STYLES ────────────────────────────────────────────────
+   Strategy:
+   - Hide #root (all app chrome: sidebar, header, dashboard, chat)
+   - Show #capa-print-root (the formal print report component only)
+   - Explicit light-theme colours throughout (no CSS variables that
+     might resolve to dark-mode tokens at print time)
+   - page-break-inside:avoid on small tables and rows only
+     (Appendix A paginate freely)
+   - All colours are hex; no rgba-alpha that could disappear on
+     printer B&W output
+   ─────────────────────────────────────────────────────────────── */
+
+@media print {
+  /* ── 1. Hide everything ─────────────────────────────────────── */
+  #root {
+    display: none !important;
+  }
+
+  /* ── 2. Show only the formal print report ───────────────────── */
+  #capa-print-root {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  /* ── 3. Page setup ──────────────────────────────────────────── */
+  @page {
+    size: A4 portrait;
+    margin: 18mm 15mm 22mm 15mm;
+  }
+
+  /* ── 4. Base text reset ─────────────────────────────────────── */
+  #capa-print-root * {
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ── 5. Table styles ────────────────────────────────────────── */
+  #capa-print-root table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+
+  #capa-print-root th {
+    background: #e0e0e0 !important;
+    color: #000 !important;
+    border: 1pt solid #999 !important;
+    font-weight: bold !important;
+    text-align: left !important;
+    padding: 4pt 5pt !important;
+  }
+
+  #capa-print-root td {
+    border: 1pt solid #ccc !important;
+    padding: 3pt 5pt !important;
+    vertical-align: top !important;
+    color: #000 !important;
+  }
+
+  /* Small tables: don't break inside (e.g. cover block, doc control).
+     Appendix A (#appendix-a table) paginates freely — no rule here. */
+  #capa-print-root table:not(#appendix-a table) {
+    page-break-inside: auto;
+  }
+
+  /* Never break inside a single table row */
+  #capa-print-root tr {
+    page-break-inside: avoid;
+  }
+
+  /* ── 6. Section headings: prevent widow heading at page bottom ─ */
+  #capa-print-root h1,
+  #capa-print-root h2,
+  #capa-print-root h3 {
+    page-break-after: avoid;
+    color: #000 !important;
+  }
+
+  /* ── 7. Severity-coloured text (black-safe alternatives) ─────── */
+  /* These override the inline colour styles so B&W printing still
+     differentiates severity via bold / italic. The browser will
+     ignore #8b0000 etc. on B&W printers, but on colour/PDF the
+     inline styles take effect via print-color-adjust:exact above. */
+  #capa-print-root .sev-major {
+    font-weight: bold !important;
+  }
+  #capa-print-root .sev-minor {
+    font-style: italic !important;
+  }
+
+  /* ── 8. Prevent blank pages ─────────────────────────────────── */
+  /* Ensure the body and html don't add extra margins */
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  /* ── 9. Links: remove underline and colour in print ─────────── */
+  #capa-print-root a {
+    text-decoration: none !important;
+    color: #000 !important;
+  }
+}

@@ -63,3 +63,9 @@ export async function fetchMcpStatus() {
   if (!res.ok) throw new Error('Failed to fetch MCP status');
   return res.json();
 }
+
+export async function fetchProtocolConfig() {
+  const res = await fetch(`${API_BASE}/protocol-config`);
+  if (!res.ok) throw new Error('Failed to fetch protocol config');
+  return res.json();
+}

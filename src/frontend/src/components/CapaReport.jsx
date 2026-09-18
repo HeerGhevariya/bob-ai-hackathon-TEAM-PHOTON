@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { fetchCapaReport, fetchSites } from '../utils/api'
+import { fetchCapaReport, fetchSites, fetchProtocolConfig } from '../utils/api'
+import CapaReportPrint from './CapaReportPrint'
 
 export default function CapaReport() {
   const { siteId: paramSiteId } = useParams()
@@ -11,6 +12,10 @@ export default function CapaReport() {
   const [report, setReport] = useState(null)
   const [loading, setLoading] = useState(false)
   const [topSites, setTopSites] = useState([])
+  const [printing, setPrinting] = useState(false)
+  const [printReady, setPrintReady] = useState(false)
+  const [protocolConfig, setProtocolConfig] = useState(null)
+  const styleTagRef = useRef(null)
 
   // Load top risk sites for the selector
   useEffect(() => {
@@ -30,11 +35,98 @@ export default function CapaReport() {
   function loadReport(id) {
     if (!id) return
     setLoading(true)
+    setReport(null)
+    setPrintReady(false)
     fetchCapaReport(id)
       .then(setReport)
       .catch(console.error)
       .finally(() => setLoading(false))
   }
+
+  // ─── Formal print handler ─────────────────────────────────────────────────
+  // Steps:
+  //   1. Fetch protocol config (Appendix B data) if not already loaded.
+  //   2. Show the print component (setPrinting(true)).
+  //   3. CapaReportPrint calls onReady after two rAFs (paint flushed).
+  //   4. Inject a dynamic @page style tag with real report metadata.
+  //   5. Call window.print().
+  //   6. On afterprint: remove the style tag and hide the print component.
+  async function handlePrint() {
+    if (!report) return
+
+    // Fetch protocol config for Appendix B if not cached
+    let config = protocolConfig
+    if (!config) {
+      try {
+        config = await fetchProtocolConfig()
+        setProtocolConfig(config)
+      } catch (e) {
+        console.warn('Could not load protocol config for print:', e)
+        config = {}
+      }
+    }
+
+    // Show the print component so React renders it into the DOM
+    setPrinting(true)
+    // onReady callback from CapaReportPrint will call window.print()
+  }
+
+  // Called by CapaReportPrint after two rAFs (DOM fully painted)
+  const handlePrintReady = useCallback(() => {
+    if (!report) return
+    const isDemoMode = import.meta.env.VITE_DEMO_MODE !== 'false'
+    const demoText = isDemoMode
+      ? 'DEMONSTRATION — SYNTHETIC DATA — NOT FOR REGULATORY SUBMISSION'
+      : ''
+    const reportId = report.report_id || ''
+    const siteName = report.site_name || ''
+    const version = report.report_version || '1.0'
+
+    // Inject @page style tag at print time with real values baked in
+    const style = document.createElement('style')
+    style.id = 'capa-print-page-style'
+    style.textContent = `
+      @page {
+        size: A4 portrait;
+        margin: 18mm 15mm 22mm 15mm;
+        @top-center {
+          content: "CAPA Report ${reportId} | ${siteName} | v${version}";
+          font-size: 8pt;
+          color: #555;
+          font-family: 'Times New Roman', serif;
+        }
+        @bottom-left {
+          content: "${demoText}";
+          font-size: 7pt;
+          color: #8b0000;
+          font-family: 'Times New Roman', serif;
+        }
+        @bottom-right {
+          content: counter(page) " of " counter(pages);
+          font-size: 8pt;
+          color: #555;
+          font-family: 'Times New Roman', serif;
+        }
+      }
+    `
+    // Remove any previous style tag before adding
+    const prev = document.getElementById('capa-print-page-style')
+    if (prev) prev.remove()
+    document.head.appendChild(style)
+    styleTagRef.current = style
+
+    // Clean up on afterprint
+    function cleanup() {
+      window.removeEventListener('afterprint', cleanup)
+      const tag = document.getElementById('capa-print-page-style')
+      if (tag) tag.remove()
+      styleTagRef.current = null
+      setPrinting(false)
+    }
+    window.addEventListener('afterprint', cleanup)
+
+    window.print()
+  }, [report])
 
   return (
     <div>
@@ -146,7 +238,7 @@ export default function CapaReport() {
                   {report.overall_risk_level} Risk
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-                  {report.ich_classification}
+                  {report.highest_severity_label || report.ich_classification}
                 </div>
               </div>
             </div>
@@ -438,18 +530,22 @@ export default function CapaReport() {
             </div>
           </div>
 
-          {/* Print / Navigation Buttons */}
-          <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
-            <button className="btn btn-primary" onClick={() => window.print()}>
-              🖨️ Print / Export Report
-            </button>
-            <button className="btn btn-ghost" onClick={() => navigate(`/sites/${report.site_id}`)}>
-              🏥 View Site Detail
-            </button>
-            <button className="btn btn-ghost" onClick={() => { setReport(null); setSiteId(''); navigate('/capa') }}>
-              📋 Generate Another
-            </button>
-          </div>
+            <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
+              <button
+                id="capa-print-btn"
+                className="btn btn-primary"
+                onClick={handlePrint}
+                disabled={printing}
+              >
+                {printing ? '⏳ Preparing report…' : '🖨️ Print / Export Formal Report'}
+              </button>
+              <button className="btn btn-ghost" onClick={() => navigate(`/sites/${report.site_id}`)}>
+                🏥 View Site Detail
+              </button>
+              <button className="btn btn-ghost" onClick={() => { setReport(null); setSiteId(''); navigate('/capa') }}>
+                📋 Generate Another
+              </button>
+            </div>
 
           {/* Full Markdown Report (collapsible) */}
           <details style={{ marginTop: 8 }}>
@@ -475,10 +571,19 @@ export default function CapaReport() {
           <div className="empty-icon">📋</div>
           <p>Select a site above to generate a CAPA report.</p>
           <p style={{ fontSize: 12, marginTop: 8 }}>
-            Reports follow ICH E6(R2) GCP guidelines and include findings, root cause analysis,
-            corrective actions, and preventive actions.
+            The formal printed report includes 11 sections and 3 appendices formatted
+            for inspection and regulatory filing.
           </p>
         </div>
+      )}
+
+      {/* ── Formal print report — hidden on screen, shown via @media print ── */}
+      {printing && (
+        <CapaReportPrint
+          report={report}
+          protocolConfig={protocolConfig}
+          onReady={handlePrintReady}
+        />
       )}
     </div>
   )

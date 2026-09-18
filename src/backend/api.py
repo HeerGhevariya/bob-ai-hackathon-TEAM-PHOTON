@@ -427,7 +427,15 @@ def get_deviation(deviation_id: str):
 
 @app.get("/api/capa/{site_id}")
 def generate_capa(site_id: str):
-    """Generate a CAPA report for a specific site."""
+    """Generate a CAPA report for a specific site.
+
+    Returns all data needed for the formal print report, including:
+    - Extended site metadata (city, country, PI)
+    - Risk profile data (score, tier, trend)
+    - Full deviation list with visit dates for Appendix A
+    - Type-to-action mapping for traceability
+    - Data-source and generation metadata for the report generation record
+    """
     site = _ds.get_site(site_id)
     if not site:
         raise HTTPException(status_code=404, detail=f"Site '{site_id}' not found")
@@ -442,45 +450,131 @@ def generate_capa(site_id: str):
         risk_profile=rp,
     )
 
+    # ── Derive overall risk level from the authoritative risk profile tier ──
+    # The risk profile tier is computed from the composite risk score (0-100).
+    # The ich_classification string in the CAPA report is derived from severity
+    # counts alone; using the risk profile tier avoids label conflicts (e.g.
+    # a site with score 98 but only minor findings would otherwise show "Low").
+    tier_to_level = {"critical": "Critical", "high": "High",
+                     "medium": "Medium", "low": "Low"}
+    if rp:
+        overall_risk_level = tier_to_level.get(rp.risk_tier.value, report.overall_risk_level)
+    else:
+        overall_risk_level = report.overall_risk_level
+
+    # ── Build visit-date lookup from site patient records ──
+    # For each deviation, retrieve the actual visit date (or scheduled date for
+    # missed visits) from the patient visit record, keyed by visit_id.
+    visit_date_map: dict[str, str] = {}
+    for patient in site.patients:
+        for visit in patient.visits:
+            if visit.actual_date is not None:
+                visit_date_map[visit.visit_id] = visit.actual_date.isoformat()
+            elif visit.scheduled_date is not None:
+                # Missed visit — use scheduled date as the visit date
+                visit_date_map[visit.visit_id] = visit.scheduled_date.isoformat()
+
+    # ── Build type → action-ID map for traceability ──
+    from collections import defaultdict as _defaultdict
+    type_action_map: dict[str, list[str]] = _defaultdict(list)
+    for a in report.corrective_actions + report.preventive_actions:
+        # Action IDs encode report_id + type prefix; we link by deviation type
+        # by matching the action index to the deviation type order
+        pass  # populated below via deviation type iteration
+
+    # Link each action to the deviation types it addresses (from templates)
+    from core.capa_generator import ROOT_CAUSE_TEMPLATES
+    from collections import Counter as _Counter
+    type_counts = _Counter(d.deviation_type for d in devs)
+    action_idx_ca = 0
+    action_idx_pa = 0
+    for dev_type, _ in type_counts.most_common():
+        template = ROOT_CAUSE_TEMPLATES.get(dev_type)
+        if template:
+            for _ in template["corrective"]:
+                if action_idx_ca < len(report.corrective_actions):
+                    a = report.corrective_actions[action_idx_ca]
+                    type_action_map[dev_type.value].append(a.action_id)
+                    action_idx_ca += 1
+            for _ in template["preventive"]:
+                if action_idx_pa < len(report.preventive_actions):
+                    a = report.preventive_actions[action_idx_pa]
+                    type_action_map[dev_type.value].append(a.action_id)
+                    action_idx_pa += 1
+
+    # Serialise deviations for Appendix A
+    def _dev_extended(d) -> dict:
+        base = _dev_to_dict(d)
+        # Actual visit date (or scheduled date for missed visits)
+        base["visit_date"] = visit_date_map.get(d.visit_id)
+        # Proposed IPD flag: Major = Yes (requires sponsor confirmation)
+        base["proposed_ipd"] = "Yes" if d.severity == "major" else "No"
+        return base
+
+    serialised_ca = [
+        {
+            "action_id": a.action_id,
+            "action_type": a.action_type,
+            "description": a.description,
+            "responsible_party": a.responsible_party,
+            "deadline": a.deadline,
+            "priority": a.priority,
+            "status": a.status,
+        }
+        for a in report.corrective_actions
+    ]
+    serialised_pa = [
+        {
+            "action_id": a.action_id,
+            "action_type": a.action_type,
+            "description": a.description,
+            "responsible_party": a.responsible_party,
+            "deadline": a.deadline,
+            "priority": a.priority,
+            "status": a.status,
+        }
+        for a in report.preventive_actions
+    ]
+
     return {
+        # ── Core report fields ──
         "report_id": report.report_id,
         "site_id": report.site_id,
         "site_name": report.site_name,
         "generated_date": report.generated_date.isoformat(),
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "report_version": "1.0",
         "executive_summary": report.executive_summary,
         "total_findings": report.total_findings,
         "severity_breakdown": report.severity_breakdown,
-        "ich_classification": report.ich_classification,
-        "overall_risk_level": report.overall_risk_level,
+        # highest_severity uses the TrialGuard classification rules label only
+        "highest_severity_label": report.ich_classification,
+        "overall_risk_level": overall_risk_level,
         "root_cause_analysis": report.root_cause_analysis,
         "contributing_factors": report.contributing_factors,
-        "corrective_actions": [
-            {
-                "action_id": a.action_id,
-                "action_type": a.action_type,
-                "description": a.description,
-                "responsible_party": a.responsible_party,
-                "deadline": a.deadline,
-                "priority": a.priority,
-                "status": a.status,
-            }
-            for a in report.corrective_actions
-        ],
-        "preventive_actions": [
-            {
-                "action_id": a.action_id,
-                "action_type": a.action_type,
-                "description": a.description,
-                "responsible_party": a.responsible_party,
-                "deadline": a.deadline,
-                "priority": a.priority,
-                "status": a.status,
-            }
-            for a in report.preventive_actions
-        ],
+        "corrective_actions": serialised_ca,
+        "preventive_actions": serialised_pa,
         "timeline_summary": report.timeline_summary,
         "next_review_date": report.next_review_date,
         "full_report_markdown": report.full_report_markdown,
+        # ── Extended site metadata ──
+        "site_city": site.city,
+        "site_country": site.country,
+        "principal_investigator": site.principal_investigator,
+        "total_patients": len(site.patients),
+        # ── Risk profile data ──
+        "risk_score": rp.risk_score if rp else None,
+        "risk_tier": rp.risk_tier.value if rp else None,
+        "trend_direction": rp.trend_direction.value if rp else None,
+        "patients_affected": rp.patients_affected if rp else None,
+        "recent_deviations_30d": rp.recent_deviations_30d if rp else None,
+        "repeat_deviation_types": rp.repeat_deviation_types if rp else [],
+        # ── Traceability ──
+        "type_action_map": dict(type_action_map),
+        # ── Full deviation list for Appendix A ──
+        "deviation_list": [_dev_extended(d) for d in devs],
+        # ── Report generation record ──
+        "data_source_type": type(_ds).__name__,
     }
 
 
@@ -548,6 +642,118 @@ def get_data_source_info():
             "Supabase (PostgreSQL)" if type(_ds).__name__ == "SupabaseDataSource"
             else "In-memory synthetic data (MockDataSource)"
         ),
+    }
+
+
+@app.get("/api/protocol-config")
+def get_protocol_config():
+    """Return all configuration constants used for detection, classification, and scoring.
+
+    Used by Appendix B of the formal CAPA print report. Every value is read
+    directly from the source module — nothing is retyped in the frontend.
+    Version constants let auditors verify which rule set produced a report.
+    """
+    from core.severity_classifier import TIMING_THRESHOLDS, DOSE_THRESHOLDS
+    from core.risk_scorer import (
+        SEVERITY_WEIGHTS, TIER_THRESHOLDS, SCORE_K,
+        REPETITION_THRESHOLD, REPETITION_RATE_BONUS,
+        TREND_WINDOW_DAYS, TREND_RISING_MULTIPLIER,
+        RECENCY_WINDOW_DAYS, RECENCY_RATE_FACTOR,
+    )
+    from core.protocol import RiskTier
+
+    # Visit schedule summary
+    visit_windows = [
+        {
+            "visit_number": v.visit_number,
+            "visit_name": v.visit_name,
+            "target_day": v.target_day,
+            "window_before": v.window_before,
+            "window_after": v.window_after,
+            "required_assessments": v.required_assessments,
+        }
+        for v in _protocol.visits
+    ]
+
+    # Banned medications list
+    banned_meds = [
+        {
+            "drug_name": m.drug_name,
+            "drug_class": m.drug_class,
+            "reason": m.reason,
+            "interaction_severity": m.interaction_severity,
+        }
+        for m in _protocol.banned_medications
+    ]
+
+    # Dose rules
+    dose_rules = [
+        {
+            "drug_name": dr.drug_name,
+            "dose_mg": dr.dose_mg,
+            "route": dr.route,
+            "frequency": dr.frequency,
+            "allowed_deviation_pct": dr.allowed_deviation_pct,
+        }
+        for dr in _protocol.dose_rules
+    ]
+
+    return {
+        # ── Version markers for the report generation record ──
+        "rules_version": "1.0",
+        "protocol_config_version": "1.0",
+        # ── Severity classification thresholds ──
+        "severity_rules": {
+            "timing_thresholds_days": {
+                "major": f"> {TIMING_THRESHOLDS['major_days']} days late or missed",
+                "minor": f"{TIMING_THRESHOLDS['minor_days']}–{TIMING_THRESHOLDS['major_days']} days late",
+                "administrative": f"1–{TIMING_THRESHOLDS['minor_days']} days late",
+            },
+            "dose_thresholds_pct": {
+                "major": f"> {DOSE_THRESHOLDS['major_pct']}% deviation from protocol dose",
+                "minor": f"{DOSE_THRESHOLDS['minor_pct']}–{DOSE_THRESHOLDS['major_pct']}%",
+                "administrative": f"2–{DOSE_THRESHOLDS['administrative_pct']}%",
+                "no_flag_below_pct": 2.0,
+            },
+            "banned_comedication": {
+                "major": "interaction_severity = high",
+                "minor": "interaction_severity = moderate",
+            },
+            "missed_visit": "Always Major (complete protocol violation)",
+            "missing_assessment": {
+                "major": "Any safety-critical assessment missing (vital_signs, ecg, blood_panel, adverse_events, informed_consent, pregnancy_test)",
+                "minor": "More than 50% of required assessments missing",
+                "administrative": "Non-critical assessments missing, < 50% missing rate",
+            },
+        },
+        # ── Risk scoring formula ──
+        "risk_scoring": {
+            "formula": "score = 100 × (1 − e^(−k × composite_rate))",
+            "score_k": SCORE_K,
+            "severity_weights": {
+                "major": SEVERITY_WEIGHTS.get("major"),
+                "minor": SEVERITY_WEIGHTS.get("minor"),
+                "administrative": SEVERITY_WEIGHTS.get("administrative"),
+            },
+            "tier_thresholds": {
+                t.value: v for t, v in TIER_THRESHOLDS.items()
+            },
+            "repetition_threshold_count": REPETITION_THRESHOLD,
+            "repetition_rate_bonus": REPETITION_RATE_BONUS,
+            "recency_window_days": RECENCY_WINDOW_DAYS,
+            "recency_rate_factor": RECENCY_RATE_FACTOR,
+            "trend_window_days": TREND_WINDOW_DAYS,
+            "trend_rising_multiplier": TREND_RISING_MULTIPLIER,
+        },
+        # ── Protocol schedule ──
+        "visit_schedule": visit_windows,
+        "dose_rules": dose_rules,
+        "banned_medications": banned_meds,
+        "protocol_id": _protocol.protocol_id,
+        "protocol_title": _protocol.protocol_title,
+        "sponsor": _protocol.sponsor,
+        "phase": _protocol.phase,
+        "indication": _protocol.indication,
     }
 
 
