@@ -1,18 +1,27 @@
-import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { ArrowLeft, MapPin, User, Users, ClipboardList } from 'lucide-react'
+import { ArrowLeft, MapPin, User, Users } from 'lucide-react'
 import { useChartTheme } from '../utils/useTheme'
 import { fetchSiteDetail } from '../utils/api'
 import RiskBadge from './RiskBadge'
 import TrendArrow from './TrendArrow'
+import DeviationRow from './DeviationRow'
+import DeviationDetailModal from './DeviationDetailModal'
 
 export default function SiteDetail() {
   const { siteId } = useParams()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const ct = useChartTheme()
+
+  // The deviation ID from the URL (for shareable links / back-button close)
+  const devIdFromUrl = searchParams.get('dev')
+
+  // Map from deviation_id → row DOM node (for focus return)
+  const rowRefs = useRef({})
 
   useEffect(() => {
     setLoading(true)
@@ -21,6 +30,49 @@ export default function SiteDetail() {
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [siteId])
+
+  // Derive selected deviation from URL param
+  const deviations = data?.deviations || []
+  const selectedDeviation = devIdFromUrl
+    ? deviations.find(d => d.deviation_id === devIdFromUrl) || null
+    : null
+  const selectedIndex = selectedDeviation
+    ? deviations.findIndex(d => d.deviation_id === selectedDeviation.deviation_id)
+    : -1
+
+  const openDeviation = useCallback((deviation) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      next.set('dev', deviation.deviation_id)
+      return next
+    }, { replace: false })
+  }, [setSearchParams])
+
+  const closeDeviation = useCallback(() => {
+    // Return focus to the row that opened the card
+    const returnId = searchParams.get('dev')
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      next.delete('dev')
+      return next
+    }, { replace: false })
+    // Defer focus so the modal has time to unmount
+    if (returnId) {
+      setTimeout(() => {
+        rowRefs.current[returnId]?.focus()
+      }, 50)
+    }
+  }, [searchParams, setSearchParams])
+
+  const navigateDeviation = useCallback((index) => {
+    const dev = deviations[index]
+    if (!dev) return
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      next.set('dev', dev.deviation_id)
+      return next
+    }, { replace: true })
+  }, [deviations, setSearchParams])
 
   if (loading) return (
     <div className="skeleton-page">
@@ -36,7 +88,7 @@ export default function SiteDetail() {
   )
   if (!data) return <div className="loading">Site not found.</div>
 
-  const { site, risk_profile: rp, deviations, patients } = data
+  const { site, risk_profile: rp } = data
 
   // Prepare deviation type chart data
   const typeData = {}
@@ -174,23 +226,14 @@ export default function SiteDetail() {
               </tr>
             </thead>
             <tbody>
-              {deviations.slice(0, 20).map((d) => (
-                <tr key={d.deviation_id}>
-                  <td style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{d.deviation_id}</td>
-                  <td style={{ fontWeight: 500 }}>{d.patient_id}</td>
-                  <td>{d.visit_name}</td>
-                  <td>{d.deviation_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</td>
-                  <td>
-                    <span className={`badge badge-${d.severity}`}>
-                      <span className={`sev-dot ${d.severity === 'administrative' ? 'admin' : d.severity}`} />
-                      {d.severity}
-                    </span>
-                  </td>
-                  <td style={{ whiteSpace: 'nowrap' }}>{d.detected_date || '—'}</td>
-                  <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12 }}>
-                    Expected {d.expected_value}, got {d.actual_value}
-                  </td>
-                </tr>
+              {deviations.slice(0, 20).map((d, idx) => (
+                <DeviationRow
+                  key={d.deviation_id}
+                  deviation={d}
+                  isOpen={selectedDeviation?.deviation_id === d.deviation_id}
+                  onClick={() => openDeviation(d)}
+                  ref={el => { rowRefs.current[d.deviation_id] = el }}
+                />
               ))}
             </tbody>
           </table>
@@ -205,6 +248,17 @@ export default function SiteDetail() {
           </div>
         )}
       </div>
+
+      {/* Deviation Detail Modal */}
+      {selectedDeviation && (
+        <DeviationDetailModal
+          deviation={selectedDeviation}
+          deviations={deviations.slice(0, 20)}
+          currentIndex={selectedIndex}
+          onClose={closeDeviation}
+          onNavigate={navigateDeviation}
+        />
+      )}
     </div>
   )
 }

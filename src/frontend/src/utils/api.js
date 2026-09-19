@@ -69,3 +69,9 @@ export async function fetchProtocolConfig() {
   if (!res.ok) throw new Error('Failed to fetch protocol config');
   return res.json();
 }
+
+export async function fetchDeviationDetail(deviationId) {
+  const res = await fetch(`${API_BASE}/deviations/${encodeURIComponent(deviationId)}/detail`);
+  if (!res.ok) throw new Error('Failed to fetch deviation detail');
+  return res.json();
+}

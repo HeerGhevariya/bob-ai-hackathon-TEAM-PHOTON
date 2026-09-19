@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Search, X } from 'lucide-react'
 import { fetchDeviations } from '../utils/api'
+import DeviationRow from './DeviationRow'
+import DeviationDetailModal from './DeviationDetailModal'
 
 export default function DeviationExplorer() {
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const [deviations, setDeviations] = useState([])
   const [total, setTotal] = useState(0)
@@ -14,6 +16,12 @@ export default function DeviationExplorer() {
   const [siteFilter, setSiteFilter] = useState(searchParams.get('site_id') || '')
   const [page, setPage] = useState(0)
   const pageSize = 40
+
+  // The deviation ID from the URL (for shareable links / back-button close)
+  const devIdFromUrl = searchParams.get('dev')
+
+  // Map from deviation_id → row DOM node (for focus return on modal close)
+  const rowRefs = useRef({})
 
   useEffect(() => {
     setLoading(true)
@@ -31,6 +39,45 @@ export default function DeviationExplorer() {
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [severity, devType, siteFilter, page])
+
+  const selectedDeviation = devIdFromUrl
+    ? deviations.find(d => d.deviation_id === devIdFromUrl) || null
+    : null
+  const selectedIndex = selectedDeviation
+    ? deviations.findIndex(d => d.deviation_id === selectedDeviation.deviation_id)
+    : -1
+
+  const openDeviation = useCallback((deviation) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      next.set('dev', deviation.deviation_id)
+      return next
+    }, { replace: false })
+  }, [setSearchParams])
+
+  const closeDeviation = useCallback(() => {
+    const returnId = searchParams.get('dev')
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      next.delete('dev')
+      return next
+    }, { replace: false })
+    if (returnId) {
+      setTimeout(() => {
+        rowRefs.current[returnId]?.focus()
+      }, 50)
+    }
+  }, [searchParams, setSearchParams])
+
+  const navigateDeviation = useCallback((index) => {
+    const dev = deviations[index]
+    if (!dev) return
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      next.set('dev', dev.deviation_id)
+      return next
+    }, { replace: true })
+  }, [deviations, setSearchParams])
 
   return (
     <div>
@@ -102,35 +149,14 @@ export default function DeviationExplorer() {
               </thead>
               <tbody>
                 {deviations.map((d) => (
-                  <tr key={d.deviation_id} onClick={() => navigate(`/sites/${d.site_id}`)}>
-                    <td style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-                      {d.deviation_id}
-                    </td>
-                    <td style={{ fontWeight: 500 }}>{d.patient_id}</td>
-                    <td>
-                      <span style={{ color: 'var(--accent)', cursor: 'pointer', fontWeight: 500 }}
-                        onClick={(e) => { e.stopPropagation(); navigate(`/sites/${d.site_id}`) }}>
-                        {d.site_id}
-                      </span>
-                    </td>
-                    <td>{d.visit_name}</td>
-                    <td style={{ whiteSpace: 'nowrap' }}>
-                      {d.deviation_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                    </td>
-                    <td>
-                      <span className={`badge badge-${d.severity}`}>
-                        <span className={`sev-dot ${d.severity === 'administrative' ? 'admin' : d.severity}`} />
-                        {d.severity}
-                      </span>
-                    </td>
-                    <td style={{ whiteSpace: 'nowrap' }}>{d.detected_date || '—'}</td>
-                    <td style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12 }}>
-                      {d.expected_value}
-                    </td>
-                    <td style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12 }}>
-                      {d.actual_value}
-                    </td>
-                  </tr>
+                  <DeviationRow
+                    key={d.deviation_id}
+                    deviation={d}
+                    isOpen={selectedDeviation?.deviation_id === d.deviation_id}
+                    onClick={() => openDeviation(d)}
+                    showSite={true}
+                    ref={el => { rowRefs.current[d.deviation_id] = el }}
+                  />
                 ))}
               </tbody>
             </table>
@@ -146,6 +172,17 @@ export default function DeviationExplorer() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Deviation Detail Modal */}
+      {selectedDeviation && (
+        <DeviationDetailModal
+          deviation={selectedDeviation}
+          deviations={deviations}
+          currentIndex={selectedIndex}
+          onClose={closeDeviation}
+          onNavigate={navigateDeviation}
+        />
       )}
     </div>
   )

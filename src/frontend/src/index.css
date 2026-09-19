@@ -2382,6 +2382,182 @@ body {
   .login-card-panel { flex: 1; background: #f4f6fb; }
 }
 
+
+/* ═══════════════════════════════════════════════════════════════
+   DEVIATION ROW — clickable rows shared by SiteDetail and DeviationExplorer
+   ═══════════════════════════════════════════════════════════════ */
+
+.dev-row {
+  cursor: pointer;
+  transition: background var(--transition);
+  outline: none;
+}
+
+.dev-row:hover td {
+  background: var(--ghost-hover-bg);
+  color: var(--text-primary);
+}
+
+.dev-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.dev-row.dev-row-open td {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DEVIATION DETAIL MODAL — centered popup card on all screen sizes
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Backdrop is portalled to document.body so it always covers the full viewport
+   regardless of any transform/stacking context in the main layout. */
+.dev-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.48);
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+  animation: devModalBackdropIn 150ms ease;
+}
+
+@keyframes devModalBackdropIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dev-modal-backdrop { animation: none; }
+  .dev-modal-card     { animation: none !important; }
+}
+
+.dev-modal-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 660px;
+  max-width: calc(100vw - 48px);
+  /* Use dvh where supported, fall back to vh */
+  height: 80vh;
+  height: 80dvh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28), 0 4px 16px rgba(0, 0, 0, 0.12);
+  animation: devModalSlideIn 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  /* Never let the card itself scroll — only .dev-modal-body scrolls */
+  overflow: hidden;
+}
+
+@keyframes devModalSlideIn {
+  from { opacity: 0; transform: scale(0.96) translateY(10px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+
+.dev-modal-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 24px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.dev-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.dev-modal-close-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition), color var(--transition);
+  flex-shrink: 0;
+}
+
+.dev-modal-close-btn:hover {
+  background: var(--ghost-hover-bg);
+  color: var(--text-primary);
+}
+
+.dev-modal-close-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.dev-modal-nav-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition), color var(--transition);
+  flex-shrink: 0;
+}
+
+.dev-modal-nav-btn:hover:not(:disabled) {
+  background: var(--ghost-hover-bg);
+  color: var(--text-primary);
+}
+
+.dev-modal-nav-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.dev-modal-nav-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.dev-modal-related-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-family: monospace;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition), border-color var(--transition);
+}
+
+.dev-modal-related-btn:hover {
+  background: var(--ghost-hover-bg);
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+}
+
+.dev-modal-related-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+
 /* ═══════════════════════════════════════════════════════════════
    PRINT STYLES — UNTOUCHED — MUST STAY EXACTLY AS ORIGINAL
    ═══════════════════════════════════════════════════════════════ */

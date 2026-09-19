@@ -425,6 +425,156 @@ def get_deviation(deviation_id: str):
     return _dev_to_dict(dev)
 
 
+@app.get("/api/deviations/{deviation_id}/detail")
+def get_deviation_detail(deviation_id: str):
+    """
+    Read-only enriched detail for the deviation card modal.
+
+    Returns everything the frontend card needs without generating any report,
+    changing any numbering, or triggering any write operation.
+
+    Extra data returned beyond the base deviation dict:
+    - site: id, name, city, country, principal_investigator
+    - visit: scheduled_date, actual_date (null = missed)
+    - related: patient's other deviations (count + first 5); same-type count at site
+    - severity_reason: static text rule that produced this severity classification
+    - capa_templates: corrective/preventive action templates for this deviation type
+    """
+    from core.capa_generator import ROOT_CAUSE_TEMPLATES
+    from core.severity_classifier import TIMING_THRESHOLDS, DOSE_THRESHOLDS
+
+    all_devs = _ds.get_all_deviations()
+    dev = next((d for d in all_devs if d.deviation_id == deviation_id), None)
+    if not dev:
+        raise HTTPException(status_code=404, detail=f"Deviation '{deviation_id}' not found")
+
+    base = _dev_to_dict(dev)
+
+    # ── Site context ──────────────────────────────────────────────
+    site = _ds.get_site(dev.site_id)
+    site_info: dict = {}
+    if site:
+        site_info = {
+            "site_id": site.site_id,
+            "site_name": site.site_name,
+            "city": site.city,
+            "country": site.country,
+            "principal_investigator": site.principal_investigator,
+        }
+
+    # ── Visit dates ───────────────────────────────────────────────
+    visit_info: dict = {
+        "scheduled_date": None,
+        "actual_date": None,
+        "is_missed": False,
+    }
+    if site:
+        for patient in site.patients:
+            if patient.patient_id == dev.patient_id:
+                for v in patient.visits:
+                    if v.visit_id == dev.visit_id:
+                        visit_info["scheduled_date"] = (
+                            v.scheduled_date.isoformat() if v.scheduled_date else None
+                        )
+                        visit_info["actual_date"] = (
+                            v.actual_date.isoformat() if v.actual_date else None
+                        )
+                        visit_info["is_missed"] = v.actual_date is None
+                        break
+                break
+
+    # ── Related deviations ────────────────────────────────────────
+    patient_devs = [d for d in all_devs if d.patient_id == dev.patient_id and d.deviation_id != deviation_id]
+    patient_other = {
+        "count": len(patient_devs),
+        "items": [
+            {
+                "deviation_id": d.deviation_id,
+                "deviation_type": d.deviation_type.value,
+                "severity": d.severity,
+                "detected_date": d.detected_date.isoformat() if d.detected_date else None,
+                "visit_name": d.visit_name,
+            }
+            for d in patient_devs[:5]
+        ],
+    }
+
+    site_type_count = sum(
+        1 for d in all_devs
+        if d.site_id == dev.site_id and d.deviation_type == dev.deviation_type and d.deviation_id != deviation_id
+    )
+
+    # ── Severity reason (static rule text, no new logic) ─────────
+    sev = dev.severity or "administrative"
+    dtype = dev.deviation_type.value
+
+    severity_reason_map: dict[str, dict[str, str]] = {
+        "missed_visit": {
+            "major": "Missed visits are always Major — they represent a complete protocol violation (ICH E6 §4.5).",
+        },
+        "late_visit": {
+            "major": f"Visit was more than {TIMING_THRESHOLDS['major_days']} days outside the allowed window.",
+            "minor": f"Visit was {TIMING_THRESHOLDS['minor_days']}–{TIMING_THRESHOLDS['major_days']} days outside the allowed window.",
+            "administrative": f"Visit was 1–{TIMING_THRESHOLDS['minor_days']} days outside the allowed window.",
+        },
+        "early_visit": {
+            "major": f"Visit was more than {TIMING_THRESHOLDS['major_days']} days before the allowed window.",
+            "minor": f"Visit was {TIMING_THRESHOLDS['minor_days']}–{TIMING_THRESHOLDS['major_days']} days before the allowed window.",
+            "administrative": f"Visit was 1–{TIMING_THRESHOLDS['minor_days']} days before the allowed window.",
+        },
+        "wrong_dose": {
+            "major": f"Dose deviation exceeded {DOSE_THRESHOLDS['major_pct']}% from protocol dose.",
+            "minor": f"Dose deviation was {DOSE_THRESHOLDS['minor_pct']}–{DOSE_THRESHOLDS['major_pct']}% from protocol dose.",
+            "administrative": f"Dose deviation was 2–{DOSE_THRESHOLDS['administrative_pct']}% from protocol dose.",
+        },
+        "banned_comedication": {
+            "major": "Banned medication has high interaction severity — risk to subject safety or trial data integrity.",
+            "minor": "Banned medication has moderate interaction severity.",
+        },
+        "missing_assessment": {
+            "major": "One or more safety-critical assessments missing (vital signs, ECG, blood panel, adverse events, informed consent, or pregnancy test).",
+            "minor": "More than 50% of required assessments for this visit were missing.",
+            "administrative": "Non-critical assessments missing; less than 50% missing rate.",
+        },
+    }
+    severity_reason = (
+        severity_reason_map.get(dtype, {}).get(sev)
+        or f"Classified as {sev} based on ICH E6(R2) GCP guidelines."
+    )
+
+    # ── CAPA templates (read-only, no report generated) ───────────
+    from core.protocol import DeviationType as DT
+    try:
+        dev_type_enum = DT(dtype)
+        template = ROOT_CAUSE_TEMPLATES.get(dev_type_enum, {})
+    except ValueError:
+        template = {}
+
+    capa_templates = {
+        "root_causes": template.get("root_causes", []),
+        "corrective_actions": [
+            {"description": desc, "responsible_party": party, "priority": priority}
+            for desc, party, priority in template.get("corrective", [])
+        ],
+        "preventive_actions": [
+            {"description": desc, "responsible_party": party, "priority": priority}
+            for desc, party, priority in template.get("preventive", [])
+        ],
+    }
+
+    return {
+        **base,
+        "site": site_info,
+        "visit_dates": visit_info,
+        "related": {
+            "patient_other_deviations": patient_other,
+            "same_type_at_site_count": site_type_count,
+        },
+        "severity_reason": severity_reason,
+        "capa_templates": capa_templates,
+    }
+
+
 @app.get("/api/capa/{site_id}")
 def generate_capa(site_id: str):
     """Generate a CAPA report for a specific site.
