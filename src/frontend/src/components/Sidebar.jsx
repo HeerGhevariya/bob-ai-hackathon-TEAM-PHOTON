@@ -70,10 +70,7 @@ export default function Sidebar({ user, onLogout }) {
 
   const sc = statusColors[mcpState.status]
 
-  const statusLabel =
-    mcpState.status === 'connected'  ? 'MCP Server Connected' :
-    mcpState.status === 'connecting' ? 'MCP Server Connecting' :
-    'MCP Server Offline'
+  const statusLabel = 'Bob Copilot'
 
   const statusBadgeText =
     mcpState.status === 'connected'  ? 'LIVE' :
@@ -119,7 +116,7 @@ export default function Sidebar({ user, onLogout }) {
             </NavLink>
           ))}
 
-          <div className="sidebar-section-label" style={{ marginTop: 20 }}>IBM Bob Integration</div>
+          <div className="sidebar-section-label" style={{ marginTop: 20 }}>AI Chatbot</div>
           <NavLink
             to="/chat"
             className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}

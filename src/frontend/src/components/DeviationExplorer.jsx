@@ -1,35 +1,21 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Search, X } from 'lucide-react'
 import { fetchDeviations } from '../utils/api'
 import DeviationRow from './DeviationRow'
 import DeviationDetailModal from './DeviationDetailModal'
 
-// Human-readable labels for deviation types
-const TYPE_LABELS = {
-  major: 'Major',
-  minor: 'Minor',
-  administrative: 'Administrative',
-  missed_visit: 'Missed Visit',
-  late_visit: 'Late Visit',
-  early_visit: 'Early Visit',
-  wrong_dose: 'Wrong Dose',
-  banned_comedication: 'Banned Co-Medication',
-  missing_assessment: 'Missing Assessment',
-}
-
 export default function DeviationExplorer() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [deviations, setDeviations] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [severity, setSeverity] = useState(searchParams.get('severity') || '')
+  const [devType, setDevType] = useState(searchParams.get('deviation_type') || '')
+  const [siteFilter, setSiteFilter] = useState(searchParams.get('site_id') || '')
+  const [page, setPage] = useState(0)
   const pageSize = 40
-
-  // URL is the single source of truth for all filters
-  const severity = searchParams.get('severity') || ''
-  const devType = searchParams.get('deviation_type') || ''
-  const siteFilter = searchParams.get('site_id') || ''
-  const page = parseInt(searchParams.get('page') || '0', 10)
 
   // The deviation ID from the URL (for shareable links / back-button close)
   const devIdFromUrl = searchParams.get('dev')
@@ -53,42 +39,6 @@ export default function DeviationExplorer() {
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [severity, devType, siteFilter, page])
-
-  // Helper: update a single search param while preserving others (except page reset)
-  const setFilter = useCallback((key, value) => {
-    setSearchParams(prev => {
-      const next = new URLSearchParams(prev)
-      if (value) {
-        next.set(key, value)
-      } else {
-        next.delete(key)
-      }
-      next.delete('page') // reset to page 0 on filter change
-      next.delete('dev')  // close any open modal
-      return next
-    }, { replace: false })
-  }, [setSearchParams])
-
-  const setPage = useCallback((newPage) => {
-    setSearchParams(prev => {
-      const next = new URLSearchParams(prev)
-      if (newPage === 0) {
-        next.delete('page')
-      } else {
-        next.set('page', String(newPage))
-      }
-      return next
-    }, { replace: false })
-  }, [setSearchParams])
-
-  const clearAllFilters = useCallback(() => {
-    setSearchParams(prev => {
-      const next = new URLSearchParams()
-      // keep dev param if open
-      if (prev.get('dev')) next.set('dev', prev.get('dev'))
-      return next
-    }, { replace: false })
-  }, [setSearchParams])
 
   const selectedDeviation = devIdFromUrl
     ? deviations.find(d => d.deviation_id === devIdFromUrl) || null
@@ -129,8 +79,6 @@ export default function DeviationExplorer() {
     }, { replace: true })
   }, [deviations, setSearchParams])
 
-  const hasFilters = severity || devType || siteFilter
-
   return (
     <div>
       <div className="page-header">
@@ -139,22 +87,14 @@ export default function DeviationExplorer() {
       </div>
 
       <div className="filter-bar">
-        <select
-          className="filter-select"
-          value={severity}
-          onChange={(e) => setFilter('severity', e.target.value)}
-        >
+        <select className="filter-select" value={severity} onChange={(e) => { setSeverity(e.target.value); setPage(0) }}>
           <option value="">All Severities</option>
           <option value="major">🔴 Major</option>
           <option value="minor">🟡 Minor</option>
           <option value="administrative">🔵 Administrative</option>
         </select>
 
-        <select
-          className="filter-select"
-          value={devType}
-          onChange={(e) => setFilter('deviation_type', e.target.value)}
-        >
+        <select className="filter-select" value={devType} onChange={(e) => { setDevType(e.target.value); setPage(0) }}>
           <option value="">All Types</option>
           <option value="missed_visit">Missed Visit</option>
           <option value="late_visit">Late Visit</option>
@@ -169,57 +109,15 @@ export default function DeviationExplorer() {
           type="text"
           placeholder="Filter by Site ID (e.g. SITE-042)"
           value={siteFilter}
-          onChange={(e) => setFilter('site_id', e.target.value)}
+          onChange={(e) => { setSiteFilter(e.target.value); setPage(0) }}
         />
 
-        {hasFilters && (
-          <button className="btn btn-ghost" onClick={clearAllFilters}>
+        {(severity || devType || siteFilter) && (
+          <button className="btn btn-ghost" onClick={() => { setSeverity(''); setDevType(''); setSiteFilter(''); setPage(0) }}>
             <X size={13} /> Clear
           </button>
         )}
       </div>
-
-      {/* Active filter chips */}
-      {hasFilters && (
-        <div className="filter-chips" aria-live="polite">
-          {severity && (
-            <span className="filter-chip">
-              Severity: {TYPE_LABELS[severity] || severity}
-              <button
-                className="filter-chip-clear"
-                aria-label={`Remove severity filter: ${TYPE_LABELS[severity] || severity}`}
-                onClick={() => setFilter('severity', '')}
-              >
-                <X size={11} />
-              </button>
-            </span>
-          )}
-          {devType && (
-            <span className="filter-chip">
-              Type: {TYPE_LABELS[devType] || devType}
-              <button
-                className="filter-chip-clear"
-                aria-label={`Remove type filter: ${TYPE_LABELS[devType] || devType}`}
-                onClick={() => setFilter('deviation_type', '')}
-              >
-                <X size={11} />
-              </button>
-            </span>
-          )}
-          {siteFilter && (
-            <span className="filter-chip">
-              Site: {siteFilter}
-              <button
-                className="filter-chip-clear"
-                aria-label={`Remove site filter: ${siteFilter}`}
-                onClick={() => setFilter('site_id', '')}
-              >
-                <X size={11} />
-              </button>
-            </span>
-          )}
-        </div>
-      )}
 
       {loading ? (
         <div className="skeleton-page">
@@ -269,8 +167,8 @@ export default function DeviationExplorer() {
               Showing {page * pageSize + 1}–{Math.min((page + 1) * pageSize, total)} of {total} deviations
             </span>
             <div className="pagination-buttons">
-              <button className="btn btn-ghost" disabled={page === 0} onClick={() => setPage(page - 1)}>← Prev</button>
-              <button className="btn btn-ghost" disabled={(page + 1) * pageSize >= total} onClick={() => setPage(page + 1)}>Next →</button>
+              <button className="btn btn-ghost" disabled={page === 0} onClick={() => setPage(p => p - 1)}>← Prev</button>
+              <button className="btn btn-ghost" disabled={(page + 1) * pageSize >= total} onClick={() => setPage(p => p + 1)}>Next →</button>
             </div>
           </div>
         </>

@@ -1,85 +1,29 @@
-import { useState, useEffect, useCallback } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ClipboardList, X } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { ClipboardList } from 'lucide-react'
 import { fetchSites } from '../utils/api'
 import RiskBadge from './RiskBadge'
 import TrendArrow from './TrendArrow'
 
-const TIER_LABELS = {
-  critical: '🔴 Critical',
-  high: '🟠 High',
-  medium: '🟡 Medium',
-  low: '🟢 Low',
-}
-
 export default function SiteLeaderboard() {
-  const [searchParams, setSearchParams] = useSearchParams()
   const [sites, setSites] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [tierFilter, setTierFilter] = useState('')
+  const [page, setPage] = useState(0)
   const pageSize = 30
   const navigate = useNavigate()
 
-  // URL is single source of truth
-  const tierFilter = searchParams.get('tier') || ''
-  const trendFilter = searchParams.get('trend') || ''
-  const page = parseInt(searchParams.get('page') || '0', 10)
-
   useEffect(() => {
     setLoading(true)
-    // When filtering by trend=rising, we may need all sites for client-side filtering
-    // so fetch with a large limit (the backend returns max 300) or no tier filter
-    fetchSites({
-      tier: tierFilter || null,
-      limit: trendFilter ? 300 : pageSize,
-      offset: trendFilter ? 0 : page * pageSize,
-    })
+    fetchSites({ tier: tierFilter || null, limit: pageSize, offset: page * pageSize })
       .then((data) => {
-        if (trendFilter) {
-          const filtered = data.sites.filter(
-            s => (s.trend_direction || '').toLowerCase() === trendFilter.toLowerCase()
-          )
-          setSites(filtered.slice(page * pageSize, (page + 1) * pageSize))
-          setTotal(filtered.length)
-        } else {
-          setSites(data.sites)
-          setTotal(data.total)
-        }
+        setSites(data.sites)
+        setTotal(data.total)
       })
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [tierFilter, trendFilter, page])
-
-  const setFilter = useCallback((key, value) => {
-    setSearchParams(prev => {
-      const next = new URLSearchParams(prev)
-      if (value) {
-        next.set(key, value)
-      } else {
-        next.delete(key)
-      }
-      next.delete('page')
-      return next
-    }, { replace: false })
-  }, [setSearchParams])
-
-  const setPage = useCallback((newPage) => {
-    setSearchParams(prev => {
-      const next = new URLSearchParams(prev)
-      if (newPage === 0) {
-        next.delete('page')
-      } else {
-        next.set('page', String(newPage))
-      }
-      return next
-    }, { replace: false })
-  }, [setSearchParams])
-
-  const clearAllFilters = useCallback(() => {
-    setSearchParams(new URLSearchParams(), { replace: false })
-  }, [setSearchParams])
-
-  const hasFilters = tierFilter || trendFilter
+  }, [tierFilter, page])
 
   return (
     <div>
@@ -89,70 +33,19 @@ export default function SiteLeaderboard() {
       </div>
 
       <div className="filter-bar">
-        <select
-          className="filter-select"
-          value={tierFilter}
-          onChange={(e) => setFilter('tier', e.target.value)}
-        >
+        <select className="filter-select" value={tierFilter} onChange={(e) => { setTierFilter(e.target.value); setPage(0) }}>
           <option value="">All Risk Tiers</option>
           <option value="critical">🔴 Critical</option>
           <option value="high">🟠 High</option>
           <option value="medium">🟡 Medium</option>
           <option value="low">🟢 Low</option>
         </select>
-
-        <select
-          className="filter-select"
-          value={trendFilter}
-          onChange={(e) => setFilter('trend', e.target.value)}
-        >
-          <option value="">All Trends</option>
-          <option value="rising">↑ Rising</option>
-          <option value="stable">→ Stable</option>
-          <option value="falling">↓ Falling</option>
-        </select>
-
-        {hasFilters && (
-          <button className="btn btn-ghost" onClick={clearAllFilters}>
-            <X size={13} /> Clear
-          </button>
-        )}
       </div>
-
-      {/* Active filter chips */}
-      {hasFilters && (
-        <div className="filter-chips" aria-live="polite">
-          {tierFilter && (
-            <span className="filter-chip">
-              Tier: {TIER_LABELS[tierFilter] || tierFilter}
-              <button
-                className="filter-chip-clear"
-                aria-label={`Remove tier filter: ${TIER_LABELS[tierFilter] || tierFilter}`}
-                onClick={() => setFilter('tier', '')}
-              >
-                <X size={11} />
-              </button>
-            </span>
-          )}
-          {trendFilter && (
-            <span className="filter-chip">
-              Trend: {trendFilter === 'rising' ? '↑ Rising' : trendFilter === 'falling' ? '↓ Falling' : '→ Stable'}
-              <button
-                className="filter-chip-clear"
-                aria-label={`Remove trend filter: ${trendFilter}`}
-                onClick={() => setFilter('trend', '')}
-              >
-                <X size={11} />
-              </button>
-            </span>
-          )}
-        </div>
-      )}
 
       {loading ? (
         <div className="skeleton-page">
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-            {[0,1,2,3,4,5,6,7,8].map(i => <div key={i} className="skeleton skeleton-row" />)}
+            {[0,1,2,3,4,5,6,7].map(i => <div key={i} className="skeleton skeleton-row" />)}
           </div>
         </div>
       ) : (
@@ -234,8 +127,8 @@ export default function SiteLeaderboard() {
               Showing {page * pageSize + 1}–{Math.min((page + 1) * pageSize, total)} of {total} sites
             </span>
             <div className="pagination-buttons">
-              <button className="btn btn-ghost" disabled={page === 0} onClick={() => setPage(page - 1)}>← Prev</button>
-              <button className="btn btn-ghost" disabled={(page + 1) * pageSize >= total} onClick={() => setPage(page + 1)}>Next →</button>
+              <button className="btn btn-ghost" disabled={page === 0} onClick={() => setPage(p => p - 1)}>← Prev</button>
+              <button className="btn btn-ghost" disabled={(page + 1) * pageSize >= total} onClick={() => setPage(p => p + 1)}>Next →</button>
             </div>
           </div>
         </>

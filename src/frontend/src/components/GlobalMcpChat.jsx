@@ -31,7 +31,7 @@ export default function GlobalMcpChat() {
   const [messages, setMessages] = useState([
     {
       role: 'bot',
-      text: '🛡️ **Global TrialGuard AI — Deep Analysis Mode**\n\nI look up real data from the PHOENIX-301 trial database and provide **in-depth, detailed analysis**. No guesses, no made-up answers.\n\n**Try asking:**\n• `Show me SITE-042`\n• `Trial summary`\n• `Top risk sites`\n• `Deviations for SITE-015`',
+      text: '🤖 **Bob Copilot — AI Trial Assistant**\n\nI look up real data from the PHOENIX-301 trial database and provide **in-depth, detailed analysis**. No guesses, no made-up answers.\n\n**Try asking:**\n• `Show me SITE-042`\n• `Trial summary`\n• `Top risk sites`\n• `Deviations for SITE-015`',
     },
   ])
   const [input, setInput] = useState('')
@@ -112,10 +112,10 @@ export default function GlobalMcpChat() {
         <div className="global-chat-title-group">
           <div className="global-chat-icon"><Bot size={22} /></div>
           <div>
-            <div className="global-chat-title">Global MCP Deep Analysis Chat</div>
+            <div className="global-chat-title">Bob Copilot</div>
             <div className="global-chat-subtitle">
               <span className="global-chat-live-dot" />
-              In-Depth AI Assistant
+              AI-Powered Trial Assistant
             </div>
           </div>
         </div>
@@ -130,7 +130,7 @@ export default function GlobalMcpChat() {
               {msg.toolUsed && (
                 <div className="global-chat-tool-badge">
                   <Zap size={11} />
-                  <span>MCP Tool: <strong>{msg.toolUsed}</strong></span>
+                  <span>Tool: <strong>{msg.toolUsed}</strong></span>
                 </div>
               )}
               <div dangerouslySetInnerHTML={{ __html: formatResponse(msg.text) }} />
