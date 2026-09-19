@@ -5,23 +5,65 @@ import { fetchDeviations } from '../utils/api'
 import DeviationRow from './DeviationRow'
 import DeviationDetailModal from './DeviationDetailModal'
 
+// Human-readable labels for deviation type keys
+const DEVIATION_TYPE_LABELS = {
+  missed_visit: 'Missed Visit',
+  late_visit: 'Late Visit',
+  early_visit: 'Early Visit',
+  wrong_dose: 'Wrong Dose',
+  banned_comedication: 'Banned Co-Medication',
+  missing_assessment: 'Missing Assessment',
+}
+
+const SEVERITY_LABELS = {
+  major: 'Major',
+  minor: 'Minor',
+  administrative: 'Administrative',
+}
+
 export default function DeviationExplorer() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const [deviations, setDeviations] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [severity, setSeverity] = useState(searchParams.get('severity') || '')
-  const [devType, setDevType] = useState(searchParams.get('deviation_type') || '')
-  const [siteFilter, setSiteFilter] = useState(searchParams.get('site_id') || '')
   const [page, setPage] = useState(0)
   const pageSize = 40
+
+  // Filter state driven entirely by URL
+  const severity = searchParams.get('severity') || ''
+  const devType = searchParams.get('deviation_type') || ''
+  const siteFilter = searchParams.get('site_id') || ''
 
   // The deviation ID from the URL (for shareable links / back-button close)
   const devIdFromUrl = searchParams.get('dev')
 
   // Map from deviation_id → row DOM node (for focus return on modal close)
   const rowRefs = useRef({})
+
+  // Helper: update a single filter param in the URL
+  const setFilter = useCallback((key, value) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (value) next.set(key, value)
+      else next.delete(key)
+      // Reset page when filter changes
+      next.delete('page')
+      return next
+    }, { replace: false })
+    setPage(0)
+  }, [setSearchParams])
+
+  const clearAllFilters = useCallback(() => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      next.delete('severity')
+      next.delete('deviation_type')
+      next.delete('site_id')
+      return next
+    }, { replace: false })
+    setPage(0)
+  }, [setSearchParams])
 
   useEffect(() => {
     setLoading(true)
@@ -79,6 +121,8 @@ export default function DeviationExplorer() {
     }, { replace: true })
   }, [deviations, setSearchParams])
 
+  const hasFilter = !!(severity || devType || siteFilter)
+
   return (
     <div>
       <div className="page-header">
@@ -87,14 +131,24 @@ export default function DeviationExplorer() {
       </div>
 
       <div className="filter-bar">
-        <select className="filter-select" value={severity} onChange={(e) => { setSeverity(e.target.value); setPage(0) }}>
+        <select
+          className="filter-select"
+          value={severity}
+          onChange={(e) => setFilter('severity', e.target.value)}
+          aria-label="Filter by severity"
+        >
           <option value="">All Severities</option>
           <option value="major">🔴 Major</option>
           <option value="minor">🟡 Minor</option>
           <option value="administrative">🔵 Administrative</option>
         </select>
 
-        <select className="filter-select" value={devType} onChange={(e) => { setDevType(e.target.value); setPage(0) }}>
+        <select
+          className="filter-select"
+          value={devType}
+          onChange={(e) => setFilter('deviation_type', e.target.value)}
+          aria-label="Filter by deviation type"
+        >
           <option value="">All Types</option>
           <option value="missed_visit">Missed Visit</option>
           <option value="late_visit">Late Visit</option>
@@ -109,13 +163,56 @@ export default function DeviationExplorer() {
           type="text"
           placeholder="Filter by Site ID (e.g. SITE-042)"
           value={siteFilter}
-          onChange={(e) => { setSiteFilter(e.target.value); setPage(0) }}
+          onChange={(e) => setFilter('site_id', e.target.value)}
+          aria-label="Filter by site ID"
         />
 
-        {(severity || devType || siteFilter) && (
-          <button className="btn btn-ghost" onClick={() => { setSeverity(''); setDevType(''); setSiteFilter(''); setPage(0) }}>
-            <X size={13} /> Clear
-          </button>
+        {/* Filter chips */}
+        {hasFilter && (
+          <>
+            {severity && (
+              <span className="filter-chip">
+                Severity: {SEVERITY_LABELS[severity] || severity}
+                <button
+                  type="button"
+                  className="filter-chip-clear"
+                  aria-label={`Clear severity filter: ${SEVERITY_LABELS[severity] || severity}`}
+                  onClick={() => setFilter('severity', '')}
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            )}
+            {devType && (
+              <span className="filter-chip">
+                Type: {DEVIATION_TYPE_LABELS[devType] || devType}
+                <button
+                  type="button"
+                  className="filter-chip-clear"
+                  aria-label={`Clear type filter: ${DEVIATION_TYPE_LABELS[devType] || devType}`}
+                  onClick={() => setFilter('deviation_type', '')}
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            )}
+            {siteFilter && (
+              <span className="filter-chip">
+                Site: {siteFilter}
+                <button
+                  type="button"
+                  className="filter-chip-clear"
+                  aria-label={`Clear site filter: ${siteFilter}`}
+                  onClick={() => setFilter('site_id', '')}
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            )}
+            <button className="btn btn-ghost" onClick={clearAllFilters} aria-label="Clear all filters">
+              <X size={13} /> Clear all
+            </button>
+          </>
         )}
       </div>
 

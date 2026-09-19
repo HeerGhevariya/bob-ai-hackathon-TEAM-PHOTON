@@ -1,29 +1,74 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { ClipboardList } from 'lucide-react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { ClipboardList, X } from 'lucide-react'
 import { fetchSites } from '../utils/api'
 import RiskBadge from './RiskBadge'
 import TrendArrow from './TrendArrow'
 
 export default function SiteLeaderboard() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [allSites, setAllSites] = useState([])
   const [sites, setSites] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [tierFilter, setTierFilter] = useState('')
   const [page, setPage] = useState(0)
   const pageSize = 30
   const navigate = useNavigate()
 
+  // Tier filter driven by URL
+  const tierFilter = searchParams.get('tier') || ''
+  // Trend filter — frontend-only, not supported by API
+  const trendFilter = searchParams.get('trend') || ''
+
+  const setTierFilter = (value) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (value) next.set('tier', value)
+      else next.delete('tier')
+      return next
+    }, { replace: false })
+    setPage(0)
+  }
+
+  const clearAllFilters = () => {
+    setSearchParams({}, { replace: false })
+    setPage(0)
+  }
+
+  // Fetch all sites for the tier filter (API supports tier, not trend)
   useEffect(() => {
     setLoading(true)
-    fetchSites({ tier: tierFilter || null, limit: pageSize, offset: page * pageSize })
+    // Fetch enough to cover all sites for trend client-side filtering;
+    // use a large limit — the mock dataset is bounded.
+    fetchSites({ tier: tierFilter || null, limit: 300, offset: 0 })
       .then((data) => {
-        setSites(data.sites)
-        setTotal(data.total)
+        setAllSites(data.sites)
       })
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [tierFilter, page])
+  }, [tierFilter])
+
+  // Apply client-side trend filter + paginate
+  useEffect(() => {
+    let filtered = allSites
+    if (trendFilter) {
+      filtered = allSites.filter(s =>
+        s.trend_direction?.toLowerCase() === trendFilter.toLowerCase()
+      )
+    }
+    setTotal(filtered.length)
+    setSites(filtered.slice(page * pageSize, (page + 1) * pageSize))
+  }, [allSites, trendFilter, page])
+
+  // Reset page when trend filter changes
+  useEffect(() => {
+    setPage(0)
+  }, [trendFilter])
+
+  // Human-readable filter chip labels
+  const tierLabel = tierFilter ? tierFilter.charAt(0).toUpperCase() + tierFilter.slice(1) : ''
+  const trendLabel = trendFilter ? trendFilter.charAt(0).toUpperCase() + trendFilter.slice(1) + ' Trend' : ''
+  const hasFilter = !!(tierFilter || trendFilter)
 
   return (
     <div>
@@ -33,13 +78,80 @@ export default function SiteLeaderboard() {
       </div>
 
       <div className="filter-bar">
-        <select className="filter-select" value={tierFilter} onChange={(e) => { setTierFilter(e.target.value); setPage(0) }}>
+        <select
+          className="filter-select"
+          value={tierFilter}
+          onChange={(e) => setTierFilter(e.target.value)}
+          aria-label="Filter by risk tier"
+        >
           <option value="">All Risk Tiers</option>
           <option value="critical">🔴 Critical</option>
           <option value="high">🟠 High</option>
           <option value="medium">🟡 Medium</option>
           <option value="low">🟢 Low</option>
         </select>
+
+        {/* Trend filter — read-only chip when set from URL; also a select for direct use */}
+        <select
+          className="filter-select"
+          value={trendFilter}
+          onChange={(e) => {
+            setSearchParams(prev => {
+              const next = new URLSearchParams(prev)
+              if (e.target.value) next.set('trend', e.target.value)
+              else next.delete('trend')
+              return next
+            }, { replace: false })
+            setPage(0)
+          }}
+          aria-label="Filter by trend direction"
+        >
+          <option value="">All Trends</option>
+          <option value="rising">📈 Rising</option>
+          <option value="stable">➡️ Stable</option>
+          <option value="declining">📉 Declining</option>
+        </select>
+
+        {hasFilter && (
+          <>
+            {tierLabel && (
+              <span className="filter-chip">
+                Tier: {tierLabel}
+                <button
+                  type="button"
+                  className="filter-chip-clear"
+                  aria-label={`Clear tier filter: ${tierLabel}`}
+                  onClick={() => setTierFilter('')}
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            )}
+            {trendLabel && (
+              <span className="filter-chip">
+                {trendLabel}
+                <button
+                  type="button"
+                  className="filter-chip-clear"
+                  aria-label={`Clear trend filter: ${trendLabel}`}
+                  onClick={() => {
+                    setSearchParams(prev => {
+                      const next = new URLSearchParams(prev)
+                      next.delete('trend')
+                      return next
+                    }, { replace: false })
+                    setPage(0)
+                  }}
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            )}
+            <button className="btn btn-ghost" onClick={clearAllFilters} aria-label="Clear all filters">
+              <X size={13} /> Clear all
+            </button>
+          </>
+        )}
       </div>
 
       {loading ? (
@@ -124,7 +236,7 @@ export default function SiteLeaderboard() {
 
           <div className="pagination">
             <span className="pagination-info">
-              Showing {page * pageSize + 1}–{Math.min((page + 1) * pageSize, total)} of {total} sites
+              Showing {total === 0 ? 0 : page * pageSize + 1}–{Math.min((page + 1) * pageSize, total)} of {total} sites
             </span>
             <div className="pagination-buttons">
               <button className="btn btn-ghost" disabled={page === 0} onClick={() => setPage(p => p - 1)}>← Prev</button>

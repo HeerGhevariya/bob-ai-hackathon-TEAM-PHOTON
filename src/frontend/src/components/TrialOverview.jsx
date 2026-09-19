@@ -1,16 +1,36 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts'
 import { AlertCircle, ClipboardList } from 'lucide-react'
 import { fetchTrialSummary, fetchTrends } from '../utils/api'
 import { SeverityDonut, RiskTierDonut } from './SeverityChart'
 import { useChartTheme } from '../utils/useTheme'
+
+// Convert "Banned Comedication" → "banned_comedication" to match API filter key
+const typeDisplayToKey = (display) =>
+  display?.toLowerCase().replace(/[- ]+/g, '_').replace(/[^a-z0-9_]/g, '') || ''
+
+/* Custom tooltip for Deviations by Type bar chart */
+function TypeBarTooltip({ active, payload, label, ct }) {
+  if (!active || !payload?.length) return null
+  const count = payload[0]?.value
+  return (
+    <div style={{ ...ct.tooltip, pointerEvents: 'none' }}>
+      <div style={{ fontWeight: 600, marginBottom: 2 }}>{label}</div>
+      <div style={{ marginBottom: 4 }}>{count?.toLocaleString()}</div>
+      <div style={{ fontSize: 11, opacity: 0.65, borderTop: `1px solid ${ct.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`, paddingTop: 4 }}>
+        Click to view
+      </div>
+    </div>
+  )
+}
 
 export default function TrialOverview() {
   const [summary, setSummary] = useState(null)
   const [trends, setTrends] = useState(null)
   const [loading, setLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState(1)
+  const [activeBarIndex, setActiveBarIndex] = useState(null)
   const navigate = useNavigate()
   const ct = useChartTheme()
   const ITEMS_PER_PAGE = 5
@@ -47,6 +67,25 @@ export default function TrialOverview() {
     currentPage * ITEMS_PER_PAGE
   ) || []
 
+  /* ── Navigation helpers ─────────────────────────────── */
+  const goToLeaderboard = (tier) => navigate(tier ? `/sites?tier=${tier}` : '/sites')
+  const goToExplorer = (params) => {
+    const qs = new URLSearchParams()
+    if (params?.severity) qs.set('severity', params.severity)
+    if (params?.deviation_type) qs.set('deviation_type', params.deviation_type)
+    navigate(`/deviations${qs.toString() ? '?' + qs.toString() : ''}`)
+  }
+
+  /* Clickable KPI card wrapper */
+  const kpiClickStyle = { cursor: 'pointer' }
+  const kpiClickProps = (handler) => ({
+    style: kpiClickStyle,
+    onClick: handler,
+    role: 'button',
+    tabIndex: 0,
+    onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handler() } },
+  })
+
   return (
     <div>
       <div className="page-header">
@@ -56,34 +95,93 @@ export default function TrialOverview() {
 
       {/* Stat Cards */}
       <div className="stats-grid">
-        <div className="stat-card animate-in">
+        {/* Total Sites → Leaderboard (unfiltered) */}
+        <div
+          className="stat-card animate-in kpi-clickable"
+          aria-label={`View all ${overview.total_sites} sites`}
+          {...kpiClickProps(() => goToLeaderboard(null))}
+        >
           <div className="stat-label">Total Sites</div>
           <div className="stat-value">{overview.total_sites}</div>
           <div className="stat-subtitle">{overview.countries} countries</div>
         </div>
+
+        {/* Patients Enrolled — non-clickable */}
         <div className="stat-card animate-in">
           <div className="stat-label">Patients Enrolled</div>
           <div className="stat-value">{overview.total_patients.toLocaleString()}</div>
           <div className="stat-subtitle">{overview.total_visits.toLocaleString()} total visits</div>
         </div>
-        <div className="stat-card danger animate-in">
+
+        {/* Total Deviations → Explorer (unfiltered); breakdown figures → filtered */}
+        <div
+          className="stat-card danger animate-in kpi-clickable"
+          aria-label={`View all ${deviations.total} deviations`}
+          {...kpiClickProps(() => goToExplorer({}))}
+        >
           <div className="stat-label">Total Deviations</div>
           <div className="stat-value">{deviations.total}</div>
-          <div className="stat-subtitle">
-            <span className="sev-dot major" /> {deviations.by_severity.major || 0} Major
+          <div className="stat-subtitle" onClick={e => e.stopPropagation()}>
+            <span
+              className="sev-dot major kpi-clickable"
+              style={{ cursor: 'pointer' }}
+              aria-label={`View ${deviations.by_severity.major || 0} Major deviations`}
+              role="button"
+              tabIndex={0}
+              onClick={(e) => { e.stopPropagation(); goToExplorer({ severity: 'major' }) }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); goToExplorer({ severity: 'major' }) } }}
+            />{' '}
+            <span
+              style={{ cursor: 'pointer', textDecoration: 'underline dotted' }}
+              role="button"
+              tabIndex={0}
+              aria-label={`View ${deviations.by_severity.major || 0} Major deviations`}
+              onClick={(e) => { e.stopPropagation(); goToExplorer({ severity: 'major' }) }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); goToExplorer({ severity: 'major' }) } }}
+            >{deviations.by_severity.major || 0} Major</span>
             <span style={{ margin: '0 4px', opacity: 0.4 }}>·</span>
-            <span className="sev-dot minor" /> {deviations.by_severity.minor || 0} Minor
+            <span className="sev-dot minor" />{' '}
+            <span
+              style={{ cursor: 'pointer', textDecoration: 'underline dotted' }}
+              role="button"
+              tabIndex={0}
+              aria-label={`View ${deviations.by_severity.minor || 0} Minor deviations`}
+              onClick={(e) => { e.stopPropagation(); goToExplorer({ severity: 'minor' }) }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); goToExplorer({ severity: 'minor' }) } }}
+            >{deviations.by_severity.minor || 0} Minor</span>
             <span style={{ margin: '0 4px', opacity: 0.4 }}>·</span>
-            <span className="sev-dot admin" /> {deviations.by_severity.administrative || 0} Admin
+            <span className="sev-dot admin" />{' '}
+            <span
+              style={{ cursor: 'pointer', textDecoration: 'underline dotted' }}
+              role="button"
+              tabIndex={0}
+              aria-label={`View ${deviations.by_severity.administrative || 0} Administrative deviations`}
+              onClick={(e) => { e.stopPropagation(); goToExplorer({ severity: 'administrative' }) }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); goToExplorer({ severity: 'administrative' }) } }}
+            >{deviations.by_severity.administrative || 0} Admin</span>
           </div>
         </div>
-        <div className="stat-card animate-in" style={alerts.critical_sites.length > 0 ? {borderColor: 'rgba(220,38,38,0.25)'} : {}}>
+
+        {/* Critical Sites → Leaderboard filtered to Critical; rising trends subtitle → trend filter */}
+        <div
+          className="stat-card animate-in kpi-clickable"
+          style={alerts.critical_sites.length > 0 ? { borderColor: 'rgba(220,38,38,0.25)', cursor: 'pointer' } : { cursor: 'pointer' }}
+          aria-label={`View ${alerts.critical_sites.length} Critical sites`}
+          {...kpiClickProps(() => goToLeaderboard('critical'))}
+        >
           <div className="stat-label">Critical Sites</div>
-          <div className="stat-value" style={{color: alerts.critical_sites.length > 0 ? 'var(--severity-major)' : 'var(--tier-low)'}}>
+          <div className="stat-value" style={{ color: alerts.critical_sites.length > 0 ? 'var(--severity-major)' : 'var(--tier-low)' }}>
             {alerts.critical_sites.length}
           </div>
-          <div className="stat-subtitle">
-            {alerts.rising_trends} sites with rising trends
+          <div className="stat-subtitle" onClick={e => e.stopPropagation()}>
+            <span
+              style={{ cursor: 'pointer', textDecoration: 'underline dotted' }}
+              role="button"
+              tabIndex={0}
+              aria-label={`View ${alerts.rising_trends} sites with rising trends`}
+              onClick={(e) => { e.stopPropagation(); navigate('/sites?trend=rising') }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); navigate('/sites?trend=rising') } }}
+            >{alerts.rising_trends} sites with rising trends</span>
           </div>
         </div>
       </div>
@@ -92,22 +190,50 @@ export default function TrialOverview() {
       <div className="grid-3" style={{ marginBottom: 28 }}>
         <div className="chart-container animate-in">
           <div className="chart-title">Deviations by Severity</div>
-          <SeverityDonut data={deviations.by_severity} />
+          <SeverityDonut
+            data={deviations.by_severity}
+            onSegmentClick={(key) => goToExplorer({ severity: key })}
+          />
         </div>
         <div className="chart-container animate-in">
           <div className="chart-title">Site Risk Distribution</div>
-          <RiskTierDonut data={risk_distribution} />
+          <RiskTierDonut
+            data={risk_distribution}
+            onSegmentClick={(key) => goToLeaderboard(key)}
+          />
         </div>
         <div className="chart-container animate-in">
           <div className="chart-title">Deviations by Type</div>
           {trends?.deviation_type_distribution && (
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={trends.deviation_type_distribution} layout="vertical" margin={{ left: 10, right: 20 }}>
+              <BarChart
+                data={trends.deviation_type_distribution}
+                layout="vertical"
+                margin={{ left: 10, right: 20 }}
+                style={{ cursor: 'pointer' }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} />
                 <XAxis type="number" tick={{ fill: ct.tick, fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis dataKey="type" type="category" tick={{ fill: ct.tick, fontSize: 11 }} axisLine={false} tickLine={false} width={110} />
-                <Tooltip contentStyle={ct.tooltip} />
-                <Bar dataKey="count" fill={ct.accent} radius={[0, 4, 4, 0]} barSize={16} />
+                <Tooltip content={<TypeBarTooltip ct={ct} />} />
+                <Bar
+                  dataKey="count"
+                  radius={[0, 4, 4, 0]}
+                  barSize={16}
+                  onClick={(entry) => goToExplorer({ deviation_type: typeDisplayToKey(entry.type) })}
+                  onMouseEnter={(_, index) => setActiveBarIndex(index)}
+                  onMouseLeave={() => setActiveBarIndex(null)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  {trends.deviation_type_distribution.map((entry, index) => (
+                    <Cell
+                      key={`bar-${index}`}
+                      fill={ct.accent}
+                      opacity={activeBarIndex === null || activeBarIndex === index ? 1 : 0.55}
+                      style={{ cursor: 'pointer' }}
+                    />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           )}

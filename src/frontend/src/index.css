@@ -2658,6 +2658,72 @@ body {
 }
 
 
+/* ─────────────────────────────────────────────────────────────
+   FILTER CHIPS (screen only)
+   ───────────────────────────────────────────────────────────── */
+@media screen {
+  .filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--accent-glow);
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+    white-space: nowrap;
+    line-height: 1;
+  }
+
+  .filter-chip-clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: inherit;
+    opacity: 0.6;
+    padding: 1px;
+    border-radius: 50%;
+    transition: opacity var(--transition);
+    line-height: 1;
+  }
+
+  .filter-chip-clear:hover { opacity: 1; }
+
+  .filter-chip-clear:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     KPI CARDS — clickable variant
+     ───────────────────────────────────────────────────────────── */
+  .stat-card.kpi-clickable {
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .stat-card.kpi-clickable:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Respect reduced-motion: disable hover translate + segment opacity transitions */
+  @media (prefers-reduced-motion: reduce) {
+    .stat-card,
+    .stat-card.kpi-clickable {
+      transition: none;
+    }
+    .stat-card:hover {
+      transform: none;
+    }
+  }
+}
+
 /* ═══════════════════════════════════════════════════════════════
    PRINT STYLES — UNTOUCHED — MUST STAY EXACTLY AS ORIGINAL
    ═══════════════════════════════════════════════════════════════ */
