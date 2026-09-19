@@ -26,7 +26,7 @@ if hasattr(sys.stderr, "reconfigure"):
 
 from abc import ABC, abstractmethod
 from collections import Counter
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any, Optional, cast
 
 from .protocol import ProtocolSpecification, get_protocol
@@ -222,6 +222,7 @@ class SupabaseDataSource(DataSource):
     def _load_all_data(self):
         """Load all data from Supabase into memory cache."""
         assert self._client is not None
+        self._loaded_at: datetime = datetime.now(timezone.utc)
         # Load sites
         sites_data: list[dict[str, Any]] = cast(list[dict[str, Any]], self._client.table("sites").select("*").execute().data or [])
         patients_data: list[dict[str, Any]] = cast(list[dict[str, Any]], self._client.table("patients").select("*").execute().data or [])

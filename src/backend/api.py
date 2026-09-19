@@ -36,6 +36,7 @@ from pydantic import BaseModel
 from core.data_source import get_data_source
 from chatbot_service import process_chat_message, get_default_suggestions
 from mcp_client_service import get_mcp_manager, get_mcp_status
+from imports.router import router as imports_router
 
 # ─── Auth helpers ─────────────────────────────────────────────────
 try:
@@ -230,6 +231,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(imports_router)
 
 
 # ─── Helper: serialize dataclasses to dicts ───────────────────────

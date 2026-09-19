@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, lazy, Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import Sidebar from './components/Sidebar'
 import TrialOverview from './components/TrialOverview'
@@ -10,6 +10,8 @@ import TrialGuardAssistant from './components/TrialGuardAssistant'
 import GlobalMcpChat from './components/GlobalMcpChat'
 import LoginPage from './components/LoginPage'
 import { isAuthenticated, getUser } from './utils/auth'
+
+const DataImport = lazy(() => import('./components/DataImport'))
 
 export default function App() {
   const [selectedSiteId, setSelectedSiteId] = useState(null)
@@ -36,28 +38,33 @@ export default function App() {
     <div className="app-layout">
       <Sidebar user={currentUser} onLogout={handleLogout} />
       <main className="main-content">
-        <Routes>
-          <Route path="/" element={<TrialOverview />} />
-          <Route path="/chat" element={<GlobalMcpChat />} />
-          <Route
-            path="/sites"
-            element={
-              <SiteLeaderboard
-                onSelectSite={(id) => setSelectedSiteId(id)}
-                onGenerateCapa={(id) => setCapaReportSiteId(id)}
-              />
-            }
-          />
-          <Route
-            path="/sites/:siteId"
-            element={
-              <SiteDetail onGenerateCapa={(id) => setCapaReportSiteId(id)} />
-            }
-          />
-          <Route path="/deviations" element={<DeviationExplorer />} />
-          <Route path="/capa" element={<CapaReport />} />
-          <Route path="/capa/:siteId" element={<CapaReport />} />
-        </Routes>
+        <Suspense fallback={<div style={{ padding: 40, color: 'var(--text-muted)' }}>Loading…</div>}>
+          <Routes>
+            <Route path="/" element={<TrialOverview />} />
+            <Route path="/chat" element={<GlobalMcpChat />} />
+            <Route
+              path="/sites"
+              element={
+                <SiteLeaderboard
+                  onSelectSite={(id) => setSelectedSiteId(id)}
+                  onGenerateCapa={(id) => setCapaReportSiteId(id)}
+                />
+              }
+            />
+            <Route
+              path="/sites/:siteId"
+              element={
+                <SiteDetail onGenerateCapa={(id) => setCapaReportSiteId(id)} />
+              }
+            />
+            <Route path="/deviations" element={<DeviationExplorer />} />
+            <Route path="/capa" element={<CapaReport />} />
+            <Route path="/capa/:siteId" element={<CapaReport />} />
+            {currentUser?.role === 'admin' && (
+              <Route path="/admin/import" element={<DataImport />} />
+            )}
+          </Routes>
+        </Suspense>
       </main>
       <TrialGuardAssistant />
     </div>

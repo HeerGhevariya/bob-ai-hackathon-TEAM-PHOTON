@@ -1,0 +1,10 @@
+{
+  "functions": {
+    "api.py": {
+      "maxDuration": 60
+    }
+  },
+  "env": {
+    "MAX_IMPORT_ROWS": "5000"
+  }
+}

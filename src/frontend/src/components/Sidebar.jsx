@@ -4,7 +4,7 @@ import { useNavigate, NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Hospital, AlertTriangle, ClipboardList,
   MessageSquare, FileText, Shield, LogOut, Menu, X,
-  Wifi, WifiOff, Loader2, Scale, Network, Database,
+  Wifi, WifiOff, Loader2, Scale, Network, Database, Upload,
 } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
 import { fetchMcpStatus } from '../utils/api'
@@ -94,6 +94,10 @@ const navItems = [
   { path: '/sites', icon: <Hospital size={16} />, label: 'Site Risk Leaderboard' },
   { path: '/deviations', icon: <AlertTriangle size={16} />, label: 'Deviation Explorer' },
   { path: '/capa', icon: <ClipboardList size={16} />, label: 'CAPA Reports' },
+]
+
+const adminNavItems = [
+  { path: '/admin/import', icon: <Upload size={16} />, label: 'Data Import' },
 ]
 
 export default function Sidebar({ user, onLogout }) {
@@ -195,6 +199,22 @@ export default function Sidebar({ user, onLogout }) {
               {item.label}
             </NavLink>
           ))}
+
+          {user?.role === 'admin' && (
+            <>
+              <div className="sidebar-section-label" style={{ marginTop: 20 }}>Admin</div>
+              {adminNavItems.map((item) => (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+                >
+                  <span className="link-icon">{item.icon}</span>
+                  {item.label}
+                </NavLink>
+              ))}
+            </>
+          )}
 
           <div className="sidebar-section-label" style={{ marginTop: 20 }}>AI Chatbot</div>
           <NavLink

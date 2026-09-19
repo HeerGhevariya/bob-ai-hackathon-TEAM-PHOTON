@@ -24,6 +24,16 @@ if errorlevel 1 (
 )
 
 echo.
+echo [Step 2b] Running Data Import unit tests (no DB required)...
+pip install pytest >nul 2>&1
+pytest test_imports.py -v --tb=short
+if errorlevel 1 (
+    echo.
+    echo WARNING: Import tests had failures.
+    pause
+)
+
+echo.
 echo [Step 3] Starting backend server for API tests...
 echo    Starting server in background...
 start /B python main.py
