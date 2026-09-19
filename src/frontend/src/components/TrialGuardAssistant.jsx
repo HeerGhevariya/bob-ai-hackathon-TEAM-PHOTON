@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { Shield, Bot, Zap, X, Trash2, Send, Hospital, ClipboardList } from 'lucide-react'
 import { sendChatMessage, fetchChatSuggestions } from '../utils/api'
 
 export default function TrialGuardAssistant({ initialOpen = false }) {
@@ -259,7 +260,7 @@ export default function TrialGuardAssistant({ initialOpen = false }) {
         aria-label="Toggle TrialGuard Assistant"
         title="Open TrialGuard Assistant"
       >
-        <span className="tg-launcher-icon">🛡️</span>
+        <span className="tg-launcher-icon"><Shield size={16} /></span>
         <span className="tg-launcher-text">Ask Assistant</span>
         <span className="tg-launcher-badge">Live</span>
       </button>
@@ -273,7 +274,7 @@ export default function TrialGuardAssistant({ initialOpen = false }) {
           {/* Header */}
           <div className="tg-assistant-header">
             <div className="tg-header-info">
-              <span className="tg-header-avatar">🤖</span>
+              <span className="tg-header-avatar"><Bot size={18} /></span>
               <div>
                 <h3 className="tg-header-title">TrialGuard Assistant</h3>
                 <span className="tg-header-status">
@@ -286,17 +287,17 @@ export default function TrialGuardAssistant({ initialOpen = false }) {
                 className="tg-icon-btn"
                 onClick={handleClearChat}
                 title="Clear Chat History"
+                aria-label="Clear chat history"
               >
-                🧹
+                <Trash2 size={14} />
               </button>
               <button
                 className="tg-icon-btn"
-                onClick={() => {
-                  setIsOpen(false)
-                }}
+                onClick={() => setIsOpen(false)}
                 title="Close Assistant"
+                aria-label="Close assistant"
               >
-                ✕
+                <X size={14} />
               </button>
             </div>
           </div>
@@ -325,12 +326,12 @@ export default function TrialGuardAssistant({ initialOpen = false }) {
                 className={`tg-message ${msg.sender === 'user' ? 'tg-msg-user' : 'tg-msg-assistant'}`}
               >
                 {msg.sender === 'assistant' && (
-                  <div className="tg-msg-avatar">🛡️</div>
+                  <div className="tg-msg-avatar"><Shield size={14} /></div>
                 )}
                 <div className="tg-msg-content">
                   {msg.toolUsed && (
                     <div className="tg-tool-badge">
-                      <span className="tg-tool-icon">⚡</span>
+                      <Zap size={10} />
                       <span>MCP Tool: <strong>{msg.toolUsed}</strong></span>
                     </div>
                   )}
@@ -346,21 +347,15 @@ export default function TrialGuardAssistant({ initialOpen = false }) {
                     <div className="tg-site-actions">
                       <button
                         className="tg-btn-action"
-                        onClick={() => {
-                          navigate(`/sites/${msg.siteId}`)
-                          setIsOpen(false)
-                        }}
+                        onClick={() => { navigate(`/sites/${msg.siteId}`); setIsOpen(false) }}
                       >
-                        🏥 View {msg.siteId} Dashboard
+                        <Hospital size={11} /> View {msg.siteId} Dashboard
                       </button>
                       <button
                         className="tg-btn-action"
-                        onClick={() => {
-                          navigate(`/capa/${msg.siteId}`)
-                          setIsOpen(false)
-                        }}
+                        onClick={() => { navigate(`/capa/${msg.siteId}`); setIsOpen(false) }}
                       >
-                        📋 Open Full CAPA Report
+                        <ClipboardList size={11} /> Open Full CAPA Report
                       </button>
                     </div>
                   )}
@@ -372,7 +367,7 @@ export default function TrialGuardAssistant({ initialOpen = false }) {
 
             {isLoading && (
               <div className="tg-message tg-msg-assistant">
-                <div className="tg-msg-avatar">🛡️</div>
+                <div className="tg-msg-avatar"><Shield size={14} /></div>
                 <div className="tg-msg-content tg-loading-bubble">
                   <span className="tg-typing-dot"></span>
                   <span className="tg-typing-dot"></span>
@@ -405,9 +400,10 @@ export default function TrialGuardAssistant({ initialOpen = false }) {
               type="submit"
               className="tg-send-btn"
               disabled={isLoading || !input.trim()}
-              title="Send Message"
+              title="Send message"
+              aria-label="Send message"
             >
-              ➤
+              <Send size={14} />
             </button>
           </form>
         </div>

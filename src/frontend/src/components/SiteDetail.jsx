@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { ArrowLeft, MapPin, User, Users, ClipboardList } from 'lucide-react'
 import { useChartTheme } from '../utils/useTheme'
 import { fetchSiteDetail } from '../utils/api'
 import RiskBadge from './RiskBadge'
@@ -21,7 +22,18 @@ export default function SiteDetail() {
       .finally(() => setLoading(false))
   }, [siteId])
 
-  if (loading) return <div className="loading"><div className="loading-spinner" />Loading site data...</div>
+  if (loading) return (
+    <div className="skeleton-page">
+      <div style={{ marginBottom: 20 }}>
+        <div className="skeleton skeleton-text short" style={{ height: 28, marginBottom: 12 }} />
+        <div className="skeleton skeleton-text wide" style={{ height: 22 }} />
+      </div>
+      <div className="skeleton-stats-grid">
+        {[0,1,2,3].map(i => <div key={i} className="skeleton skeleton-card" />)}
+      </div>
+      <div className="skeleton skeleton-chart" style={{ height: 260 }} />
+    </div>
+  )
   if (!data) return <div className="loading">Site not found.</div>
 
   const { site, risk_profile: rp, deviations, patients } = data
@@ -42,11 +54,15 @@ export default function SiteDetail() {
         <div className="detail-header-info">
           <button className="btn btn-ghost" style={{ marginBottom: 12, fontSize: 12 }}
             onClick={() => navigate('/sites')}>
-            ← Back to Leaderboard
+            <ArrowLeft size={14} /> Back to Leaderboard
           </button>
           <div className="page-header" style={{ marginBottom: 0 }}>
             <h2>{site.site_id} — {site.site_name}</h2>
-            <p>📍 {site.city}, {site.country} • 👨‍⚕️ {site.principal_investigator} • 👥 {site.total_patients} patients</p>
+            <p style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><MapPin size={13} />{site.city}, {site.country}</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><User size={13} />{site.principal_investigator}</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Users size={13} />{site.total_patients} patients</span>
+            </p>
           </div>
         </div>
         {rp && (
@@ -133,7 +149,7 @@ export default function SiteDetail() {
       {/* CAPA Button */}
       <div style={{ marginBottom: 28 }}>
         <button className="btn btn-primary" onClick={() => navigate(`/capa/${site.site_id}`)}>
-          📋 Generate CAPA Report for {site.site_id}
+          Generate CAPA Report for {site.site_id}
         </button>
       </div>
 
@@ -166,7 +182,8 @@ export default function SiteDetail() {
                   <td>{d.deviation_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</td>
                   <td>
                     <span className={`badge badge-${d.severity}`}>
-                      {d.severity === 'major' ? '🔴' : d.severity === 'minor' ? '🟡' : '🔵'} {d.severity}
+                      <span className={`sev-dot ${d.severity === 'administrative' ? 'admin' : d.severity}`} />
+                      {d.severity}
                     </span>
                   </td>
                   <td style={{ whiteSpace: 'nowrap' }}>{d.detected_date || '—'}</td>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { BarChart2, AlertTriangle, ClipboardList, Bot, Trophy, Scale, Shield } from 'lucide-react'
 import { login, register } from '../utils/auth'
 
 const DEMO_CREDENTIAL = {
@@ -74,7 +75,7 @@ export default function LoginPage({ onAuthenticated }) {
         <div className="login-brand-panel">
           <div className="login-brand-content">
             <div className="login-logo">
-              <span className="login-logo-icon">🛡️</span>
+              <span className="login-logo-icon"><Shield size={48} /></span>
               <span className="login-logo-text">
                 Trial<span className="login-logo-accent">Guard</span> AI
               </span>
@@ -83,10 +84,10 @@ export default function LoginPage({ onAuthenticated }) {
 
             <div className="login-features">
               {[
-                { icon: '📊', label: 'Real-time Risk Scoring', desc: 'Composite risk scores across all trial sites' },
-                { icon: '⚠️', label: 'Protocol Deviation Detection', desc: 'AI-powered deviation classification & severity' },
-                { icon: '📋', label: 'CAPA Report Generation', desc: 'Automated corrective action reports via watsonx.ai' },
-                { icon: '🤖', label: 'MCP-Powered AI Assistant', desc: 'IBM Bob-integrated conversational data analysis' },
+                { icon: <BarChart2 size={18} />, label: 'Real-time Risk Scoring', desc: 'Composite risk scores across all trial sites' },
+                { icon: <AlertTriangle size={18} />, label: 'Protocol Deviation Detection', desc: 'AI-powered deviation classification & severity' },
+                { icon: <ClipboardList size={18} />, label: 'CAPA Report Generation', desc: 'Automated corrective action reports via watsonx.ai' },
+                { icon: <Bot size={18} />, label: 'MCP-Powered AI Assistant', desc: 'IBM Bob-integrated conversational data analysis' },
               ].map((f) => (
                 <div key={f.label} className="login-feature">
                   <span className="login-feature-icon">{f.icon}</span>
@@ -99,7 +100,7 @@ export default function LoginPage({ onAuthenticated }) {
             </div>
 
             <div className="login-hackathon-badge">
-              <span>🏆</span>
+              <Trophy size={13} />
               <span>Bob AI Hackathon 2026 — Team Photon</span>
             </div>
           </div>
@@ -140,7 +141,7 @@ export default function LoginPage({ onAuthenticated }) {
               <div className="login-demo-card" onClick={applyDemo} id="demo-credential-card" role="button" tabIndex={0} onKeyDown={e => e.key === 'Enter' && applyDemo()}>
                 <div className="login-demo-badge">DEMO ACCESS</div>
                 <div className="login-demo-header">
-                  <span className="login-demo-role-icon">⚖️</span>
+                  <span className="login-demo-role-icon"><Scale size={20} /></span>
                   <div>
                     <div className="login-demo-role">{DEMO_CREDENTIAL.label}</div>
                     <div className="login-demo-desc">{DEMO_CREDENTIAL.description}</div>
@@ -156,9 +157,7 @@ export default function LoginPage({ onAuthenticated }) {
                     <span className="login-demo-cred-value">{DEMO_CREDENTIAL.password}</span>
                   </div>
                 </div>
-                <div className="login-demo-hint">
-                  <span>👆 Click to auto-fill credentials</span>
-                </div>
+                <div className="login-demo-hint">Click to auto-fill credentials</div>
               </div>
             )}
 
@@ -210,7 +209,7 @@ export default function LoginPage({ onAuthenticated }) {
 
               {error && (
                 <div className="login-error-banner" role="alert">
-                  <span>⚠️</span>
+                  <AlertTriangle size={15} />
                   <span>{error}</span>
                 </div>
               )}

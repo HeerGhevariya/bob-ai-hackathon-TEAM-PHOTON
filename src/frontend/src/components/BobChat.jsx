@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Bot, Zap, X, Send, Hospital, ClipboardList } from 'lucide-react'
 import { sendChatMessage } from '../utils/api'
 
 const DEFAULT_SUGGESTIONS = [
@@ -118,9 +119,9 @@ export default function BobChat() {
         title="Bob MCP Chatbot"
       >
         {isOpen ? (
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          <span className="bob-chat-fab-icon"><X size={20} /></span>
         ) : (
-          <span className="bob-chat-fab-icon">🤖</span>
+          <span className="bob-chat-fab-icon"><Bot size={22} /></span>
         )}
         {hasUnread && !isOpen && <span className="bob-chat-unread-dot" />}
       </button>
@@ -131,7 +132,7 @@ export default function BobChat() {
           {/* Header */}
           <div className="bob-chat-header">
             <div className="bob-chat-header-left">
-              <span className="bob-chat-header-icon">🤖</span>
+              <div className="bob-chat-header-icon"><Bot size={18} /></div>
               <div>
                 <div className="bob-chat-header-title">Bob MCP Chat</div>
                 <div className="bob-chat-header-subtitle">
@@ -140,8 +141,8 @@ export default function BobChat() {
                 </div>
               </div>
             </div>
-            <button className="bob-chat-close" onClick={() => setIsOpen(false)} aria-label="Close">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+            <button className="bob-chat-close" onClick={() => setIsOpen(false)} aria-label="Close chat">
+              <X size={16} />
             </button>
           </div>
 
@@ -150,13 +151,13 @@ export default function BobChat() {
             {messages.map((msg, i) => (
               <div key={i} className={`bob-chat-msg ${msg.role}`}>
                 {msg.role === 'bot' && (
-                  <div className="bob-chat-msg-avatar">🛡️</div>
+                  <div className="bob-chat-msg-avatar"><Bot size={14} /></div>
                 )}
                 <div className={`bob-chat-bubble ${msg.role} ${msg.isError ? 'error' : ''}`}>
                   {/* MCP Tool Badge */}
                   {msg.toolUsed && (
                     <div className="bob-chat-tool-badge">
-                      <span>⚡</span>
+                      <Zap size={10} />
                       <span>MCP Tool: <strong>{msg.toolUsed}</strong></span>
                     </div>
                   )}
@@ -168,13 +169,13 @@ export default function BobChat() {
                         className="bob-chat-link-btn"
                         onClick={() => handleNavigate(msg.siteId, 'site')}
                       >
-                        🏥 View {msg.siteId} →
+                        <Hospital size={11} /> View {msg.siteId}
                       </button>
                       <button
                         className="bob-chat-link-btn"
                         onClick={() => handleNavigate(msg.siteId, 'capa')}
                       >
-                        📋 CAPA Report →
+                        <ClipboardList size={11} /> CAPA Report
                       </button>
                     </div>
                   )}
@@ -183,7 +184,7 @@ export default function BobChat() {
             ))}
             {loading && (
               <div className="bob-chat-msg bot">
-                <div className="bob-chat-msg-avatar">🛡️</div>
+                <div className="bob-chat-msg-avatar"><Bot size={14} /></div>
                 <div className="bob-chat-bubble bot">
                   <div className="bob-chat-typing">
                     <span /><span /><span />
@@ -224,9 +225,9 @@ export default function BobChat() {
               className="bob-chat-send"
               onClick={() => handleSend()}
               disabled={!input.trim() || loading}
-              aria-label="Send"
+              aria-label="Send message"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
+              <Send size={16} />
             </button>
           </div>
         </div>

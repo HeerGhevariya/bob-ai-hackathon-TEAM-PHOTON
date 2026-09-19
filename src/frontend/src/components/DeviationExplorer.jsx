@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Search, X } from 'lucide-react'
 import { fetchDeviations } from '../utils/api'
 
 export default function DeviationExplorer() {
@@ -66,16 +67,20 @@ export default function DeviationExplorer() {
 
         {(severity || devType || siteFilter) && (
           <button className="btn btn-ghost" onClick={() => { setSeverity(''); setDevType(''); setSiteFilter(''); setPage(0) }}>
-            ✕ Clear Filters
+            <X size={13} /> Clear
           </button>
         )}
       </div>
 
       {loading ? (
-        <div className="loading"><div className="loading-spinner" />Loading deviations...</div>
+        <div className="skeleton-page">
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            {[0,1,2,3,4,5,6,7,8].map(i => <div key={i} className="skeleton skeleton-row" />)}
+          </div>
+        </div>
       ) : deviations.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-icon">🔍</div>
+          <div className="empty-icon"><Search size={40} /></div>
           <p>No deviations match the current filters.</p>
         </div>
       ) : (
@@ -114,7 +119,8 @@ export default function DeviationExplorer() {
                     </td>
                     <td>
                       <span className={`badge badge-${d.severity}`}>
-                        {d.severity === 'major' ? '🔴' : d.severity === 'minor' ? '🟡' : '🔵'} {d.severity}
+                        <span className={`sev-dot ${d.severity === 'administrative' ? 'admin' : d.severity}`} />
+                        {d.severity}
                       </span>
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>{d.detected_date || '—'}</td>

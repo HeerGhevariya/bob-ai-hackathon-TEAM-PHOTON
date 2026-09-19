@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ClipboardList } from 'lucide-react'
 import { fetchSites } from '../utils/api'
 import RiskBadge from './RiskBadge'
 import TrendArrow from './TrendArrow'
@@ -42,7 +43,11 @@ export default function SiteLeaderboard() {
       </div>
 
       {loading ? (
-        <div className="loading"><div className="loading-spinner" />Loading sites...</div>
+        <div className="skeleton-page">
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            {[0,1,2,3,4,5,6,7].map(i => <div key={i} className="skeleton skeleton-row" />)}
+          </div>
+        </div>
       ) : (
         <>
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -57,9 +62,9 @@ export default function SiteLeaderboard() {
                   <th>Tier</th>
                   <th>Trend</th>
                   <th>Deviations</th>
-                  <th style={{ textAlign: 'center' }}>🔴</th>
-                  <th style={{ textAlign: 'center' }}>🟡</th>
-                  <th style={{ textAlign: 'center' }}>🔵</th>
+                  <th style={{ textAlign: 'center' }}>Major</th>
+                  <th style={{ textAlign: 'center' }}>Minor</th>
+                  <th style={{ textAlign: 'center' }}>Admin</th>
                   <th>Patients</th>
                   <th>Actions</th>
                 </tr>
@@ -107,7 +112,7 @@ export default function SiteLeaderboard() {
                         style={{ padding: '5px 12px', fontSize: 11 }}
                         onClick={(e) => { e.stopPropagation(); navigate(`/capa/${site.site_id}`) }}
                       >
-                        📋 CAPA
+                        <ClipboardList size={12} /> CAPA
                       </button>
                     </td>
                   </tr>

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Bot, Zap, Send, Hospital, ClipboardList } from 'lucide-react'
 import { sendChatMessage } from '../utils/api'
 import './GlobalMcpChat.css'
 
@@ -109,11 +110,11 @@ export default function GlobalMcpChat() {
       {/* Header */}
       <div className="global-chat-header">
         <div className="global-chat-title-group">
-          <span className="global-chat-icon">🧠</span>
+          <div className="global-chat-icon"><Bot size={22} /></div>
           <div>
             <div className="global-chat-title">Global MCP Deep Analysis Chat</div>
             <div className="global-chat-subtitle">
-              <span className="tg-status-dot" style={{ background: '#22c55e', boxShadow: '0 0 6px #22c55e' }} />
+              <span className="global-chat-live-dot" />
               In-Depth AI Assistant
             </div>
           </div>
@@ -124,29 +125,29 @@ export default function GlobalMcpChat() {
       <div className="global-chat-messages">
         {messages.map((msg, i) => (
           <div key={i} className={`global-chat-msg ${msg.role}`}>
-            {msg.role === 'bot' && <div className="global-chat-avatar">🛡️</div>}
+            {msg.role === 'bot' && <div className="global-chat-avatar"><Bot size={18} /></div>}
             <div className="global-chat-bubble">
               {msg.toolUsed && (
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', background: 'rgba(0, 184, 148, 0.1)', color: 'var(--accent)', borderRadius: '6px', fontSize: '12px', fontWeight: '600', marginBottom: '10px' }}>
-                  <span>⚡</span>
+                <div className="global-chat-tool-badge">
+                  <Zap size={11} />
                   <span>MCP Tool: <strong>{msg.toolUsed}</strong></span>
                 </div>
               )}
               <div dangerouslySetInnerHTML={{ __html: formatResponse(msg.text) }} />
               
               {msg.siteId && (
-                <div style={{ display: 'flex', gap: '10px', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
+                <div className="global-chat-site-actions">
                   <button
+                    className="global-chat-link-btn"
                     onClick={() => handleNavigate(msg.siteId, 'site')}
-                    style={{ padding: '8px 16px', background: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'var(--accent)', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', transition: '0.2s' }}
                   >
-                    🏥 View {msg.siteId} Dashboard →
+                    <Hospital size={12} /> View {msg.siteId} Dashboard
                   </button>
                   <button
+                    className="global-chat-link-btn"
                     onClick={() => handleNavigate(msg.siteId, 'capa')}
-                    style={{ padding: '8px 16px', background: 'var(--bg-primary)', border: '1px solid var(--border)', color: 'var(--accent)', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', transition: '0.2s' }}
                   >
-                    📋 View CAPA Report →
+                    <ClipboardList size={12} /> View CAPA Report
                   </button>
                 </div>
               )}
@@ -156,11 +157,11 @@ export default function GlobalMcpChat() {
         
         {loading && (
           <div className="global-chat-msg bot">
-            <div className="global-chat-avatar">🛡️</div>
-            <div className="global-chat-bubble" style={{ display: 'flex', gap: '6px', padding: '20px' }}>
-              <span className="tg-typing-dot" style={{ background: 'var(--accent)' }} />
-              <span className="tg-typing-dot" style={{ background: 'var(--accent)', animationDelay: '-0.16s' }} />
-              <span className="tg-typing-dot" style={{ background: 'var(--accent)', animationDelay: '-0.32s' }} />
+            <div className="global-chat-avatar"><Bot size={18} /></div>
+            <div className="global-chat-bubble">
+              <div className="global-chat-typing">
+                <span /><span /><span />
+              </div>
             </div>
           </div>
         )}
@@ -197,12 +198,10 @@ export default function GlobalMcpChat() {
           className="global-chat-send"
           onClick={() => handleSend()}
           disabled={!input.trim() || loading}
-          aria-label="Send"
+          aria-label="Send message"
+          title="Send message"
         >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="22" y1="2" x2="11" y2="13" />
-            <polygon points="22 2 15 22 11 13 2 9 22 2" />
-          </svg>
+          <Send size={20} />
         </button>
       </div>
     </div>

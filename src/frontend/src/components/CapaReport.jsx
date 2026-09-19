@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { Printer, FileDown } from 'lucide-react'
 import { fetchCapaReport, fetchSites, fetchProtocolConfig } from '../utils/api'
 import CapaReportPrint from './CapaReportPrint'
 
@@ -149,7 +150,7 @@ export default function CapaReport() {
               onKeyDown={(e) => e.key === 'Enter' && loadReport(siteId)}
             />
             <button className="btn btn-primary" onClick={() => loadReport(siteId)} disabled={!siteId || loading}>
-              {loading ? '⏳ Generating...' : '📋 Generate CAPA Report'}
+              {loading ? <><span className="loading-spinner" style={{ width: 16, height: 16, marginRight: 0 }} /> Generating…</> : 'Generate CAPA Report'}
             </button>
           </div>
 
@@ -166,12 +167,11 @@ export default function CapaReport() {
                     style={{ padding: '6px 14px', fontSize: 12 }}
                     onClick={() => { setSiteId(s.site_id); loadReport(s.site_id) }}
                   >
-                    <span style={{
-                      color: s.risk_tier === 'critical' ? 'var(--tier-critical)' :
-                             s.risk_tier === 'high' ? 'var(--tier-high)' : 'var(--text-secondary)'
-                    }}>
-                      {s.risk_tier === 'critical' ? '🔴' : s.risk_tier === 'high' ? '🟠' : '🟡'}
-                    </span>
+                    <span className="sev-dot" style={{
+                      background: s.risk_tier === 'critical' ? 'var(--tier-critical)' :
+                             s.risk_tier === 'high' ? 'var(--tier-high)' :
+                             s.risk_tier === 'medium' ? 'var(--tier-medium)' : 'var(--tier-low)'
+                    }} />
                     {s.site_id} — {s.risk_score}/100
                   </button>
                 ))}
@@ -234,7 +234,11 @@ export default function CapaReport() {
                     : report.overall_risk_level === 'Medium' ? '#f59e0b'
                     : '#22c55e',
                 }}>
-                  {report.overall_risk_level === 'High' ? '🔴' : report.overall_risk_level === 'Medium' ? '🟡' : '🟢'}
+                  <span className="sev-dot" style={{
+                    background: report.overall_risk_level === 'High' ? 'var(--tier-critical)' :
+                      report.overall_risk_level === 'Medium' ? 'var(--tier-medium)' : 'var(--tier-low)',
+                    width: 8, height: 8,
+                  }} />
                   {report.overall_risk_level} Risk
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
@@ -247,9 +251,9 @@ export default function CapaReport() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 24 }}>
               {[
                 { label: 'Total Findings', value: report.total_findings, color: 'var(--text-primary)' },
-                { label: 'Major', value: report.severity_breakdown?.major || 0, color: '#ef4444', icon: '🔴' },
-                { label: 'Minor', value: report.severity_breakdown?.minor || 0, color: '#f59e0b', icon: '🟡' },
-                { label: 'Administrative', value: report.severity_breakdown?.administrative || 0, color: '#3b82f6', icon: '🔵' },
+                { label: 'Major', value: report.severity_breakdown?.major || 0, color: 'var(--severity-major)', dot: 'major' },
+                { label: 'Minor', value: report.severity_breakdown?.minor || 0, color: 'var(--severity-minor)', dot: 'minor' },
+                { label: 'Administrative', value: report.severity_breakdown?.administrative || 0, color: 'var(--severity-admin)', dot: 'admin' },
                 { label: 'Corrective Actions', value: report.corrective_actions.length, color: 'var(--accent)' },
                 { label: 'Preventive Actions', value: report.preventive_actions.length, color: 'var(--accent)' },
               ].map((m, i) => (
@@ -259,8 +263,9 @@ export default function CapaReport() {
                   padding: '14px 16px',
                   border: '1px solid var(--border)',
                 }}>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, marginBottom: 6 }}>
-                    {m.icon || ''} {m.label}
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    {m.dot && <span className={`sev-dot ${m.dot}`} />}
+                    {m.label}
                   </div>
                   <div style={{ fontSize: 26, fontWeight: 800, color: m.color, letterSpacing: '-0.03em', lineHeight: 1 }}>
                     {m.value}
@@ -444,7 +449,7 @@ export default function CapaReport() {
             borderLeft: '4px solid #00d4aa',
           }}>
             <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 10 }}>
-              🛡️ Preventive Actions
+              Preventive Actions
               <span style={{
                 fontSize: 13, padding: '3px 14px', borderRadius: 99,
                 background: 'rgba(0,212,170,0.12)', color: '#00d4aa', fontWeight: 700,
@@ -530,20 +535,22 @@ export default function CapaReport() {
             </div>
           </div>
 
-            <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
+            <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
               <button
                 id="capa-print-btn"
                 className="btn btn-primary"
                 onClick={handlePrint}
                 disabled={printing}
               >
-                {printing ? '⏳ Preparing report…' : '🖨️ Print / Export Formal Report'}
+                {printing
+                  ? <><span className="loading-spinner" style={{ width: 16, height: 16, marginRight: 0 }} /> Preparing…</>
+                  : <><Printer size={14} /> Print / Export Formal Report</>}
               </button>
               <button className="btn btn-ghost" onClick={() => navigate(`/sites/${report.site_id}`)}>
-                🏥 View Site Detail
+                View Site Detail
               </button>
               <button className="btn btn-ghost" onClick={() => { setReport(null); setSiteId(''); navigate('/capa') }}>
-                📋 Generate Another
+                Generate Another
               </button>
             </div>
 
@@ -557,7 +564,7 @@ export default function CapaReport() {
               padding: '12px 0',
               userSelect: 'none',
             }}>
-              📄 View Full Regulatory Report (Markdown)
+              View Full Regulatory Report (Markdown)
             </summary>
             <div className="capa-report" style={{ marginTop: 12 }}>
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{report.full_report_markdown}</ReactMarkdown>
@@ -568,7 +575,7 @@ export default function CapaReport() {
 
       {!report && !loading && !paramSiteId && (
         <div className="empty-state">
-          <div className="empty-icon">📋</div>
+          <div className="empty-icon"><FileDown size={40} /></div>
           <p>Select a site above to generate a CAPA report.</p>
           <p style={{ fontSize: 12, marginTop: 8 }}>
             The formal printed report includes 11 sections and 3 appendices formatted

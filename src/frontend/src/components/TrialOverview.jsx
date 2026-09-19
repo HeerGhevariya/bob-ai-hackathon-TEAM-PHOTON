@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { AlertCircle, ClipboardList } from 'lucide-react'
 import { fetchTrialSummary, fetchTrends } from '../utils/api'
 import { SeverityDonut, RiskTierDonut } from './SeverityChart'
 import { useChartTheme } from '../utils/useTheme'
@@ -21,7 +22,21 @@ export default function TrialOverview() {
       .finally(() => setLoading(false))
   }, [])
 
-  if (loading) return <div className="loading"><div className="loading-spinner" />Loading trial data...</div>
+  if (loading) return (
+    <div className="skeleton-page">
+      <div className="page-header">
+        <div className="skeleton skeleton-text wide" style={{ height: 28, marginBottom: 8 }} />
+        <div className="skeleton skeleton-text short" />
+      </div>
+      <div className="skeleton-stats-grid">
+        {[0,1,2,3].map(i => <div key={i} className="skeleton skeleton-card" />)}
+      </div>
+      <div className="grid-3" style={{ marginBottom: 24 }}>
+        {[0,1,2].map(i => <div key={i} className="skeleton skeleton-chart" />)}
+      </div>
+      <div className="skeleton skeleton-chart" style={{ height: 280 }} />
+    </div>
+  )
   if (!summary) return <div className="loading">Failed to load data.</div>
 
   const { overview, deviations, risk_distribution, alerts, trial } = summary
@@ -55,10 +70,14 @@ export default function TrialOverview() {
           <div className="stat-label">Total Deviations</div>
           <div className="stat-value">{deviations.total}</div>
           <div className="stat-subtitle">
-            🔴 {deviations.by_severity.major || 0} Major • 🟡 {deviations.by_severity.minor || 0} Minor • 🔵 {deviations.by_severity.administrative || 0} Admin
+            <span className="sev-dot major" /> {deviations.by_severity.major || 0} Major
+            <span style={{ margin: '0 4px', opacity: 0.4 }}>·</span>
+            <span className="sev-dot minor" /> {deviations.by_severity.minor || 0} Minor
+            <span style={{ margin: '0 4px', opacity: 0.4 }}>·</span>
+            <span className="sev-dot admin" /> {deviations.by_severity.administrative || 0} Admin
           </div>
         </div>
-        <div className="stat-card animate-in" style={alerts.critical_sites.length > 0 ? {borderColor: 'rgba(239,68,68,0.3)'} : {}}>
+        <div className="stat-card animate-in" style={alerts.critical_sites.length > 0 ? {borderColor: 'rgba(220,38,38,0.25)'} : {}}>
           <div className="stat-label">Critical Sites</div>
           <div className="stat-value" style={{color: alerts.critical_sites.length > 0 ? 'var(--severity-major)' : 'var(--tier-low)'}}>
             {alerts.critical_sites.length}
@@ -115,9 +134,9 @@ export default function TrialOverview() {
 
       {/* Alerts Panel */}
       {alerts.critical_sites.length > 0 && (
-        <div className="card animate-in" style={{ borderColor: 'rgba(239,68,68,0.2)', background: 'rgba(239,68,68,0.04)' }}>
-          <div className="chart-title" style={{ color: 'var(--severity-major)' }}>
-            ⚠️ Critical Site Alerts
+        <div className="card animate-in" style={{ borderColor: 'rgba(220,38,38,0.18)', background: 'rgba(220,38,38,0.03)' }}>
+          <div className="chart-title" style={{ color: 'var(--severity-major)', display: 'flex', alignItems: 'center', gap: 7 }}>
+            <AlertCircle size={16} /> Critical Site Alerts
           </div>
           <div className="table-responsive">
             <table className="data-table">
@@ -140,9 +159,9 @@ export default function TrialOverview() {
                       </span>
                     </td>
                     <td>
-                      <button className="btn btn-ghost" style={{ padding: '6px 14px', fontSize: 12 }}
+                      <button className="btn btn-ghost" style={{ padding: '5px 12px', fontSize: 11 }}
                         onClick={(e) => { e.stopPropagation(); navigate(`/capa/${site.site_id}`) }}>
-                        📋 Generate CAPA
+                        <ClipboardList size={13} /> Generate CAPA
                       </button>
                     </td>
                   </tr>

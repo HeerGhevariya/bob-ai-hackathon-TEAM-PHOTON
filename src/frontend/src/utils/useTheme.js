@@ -30,15 +30,18 @@ export function useChartTheme() {
 
   return {
     tooltip: {
-      background: isDark ? '#111b2e' : '#ffffff',
-      border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
-      borderRadius: 10,
-      color: isDark ? '#e8ecf4' : '#1a1d26',
-      fontSize: 13,
-      boxShadow: isDark ? '0 8px 32px rgba(0,0,0,0.4)' : '0 8px 32px rgba(0,0,0,0.08)',
+      background: isDark ? '#131e30' : '#ffffff',
+      border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)'}`,
+      borderRadius: 8,
+      color: isDark ? '#e8ecf4' : '#111827',
+      fontSize: 12.5,
+      boxShadow: isDark
+        ? '0 8px 32px rgba(0,0,0,0.45)'
+        : '0 8px 24px rgba(0,0,0,0.08)',
+      padding: '8px 12px',
     },
-    tick: isDark ? '#5a6478' : '#8b95a8',
-    grid: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.05)',
+    tick: isDark ? '#4e5a6e' : '#9ca3af',
+    grid: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)',
     accent: isDark ? '#00d4aa' : '#00b894',
     isDark,
   }
