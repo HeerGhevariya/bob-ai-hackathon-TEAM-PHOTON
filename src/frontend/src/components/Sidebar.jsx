@@ -1,13 +1,93 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate, NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Hospital, AlertTriangle, ClipboardList,
   MessageSquare, FileText, Shield, LogOut, Menu, X,
-  Wifi, WifiOff, Loader2, FlaskConical, Scale, Network, Database,
+  Wifi, WifiOff, Loader2, Scale, Network, Database,
 } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
 import { fetchMcpStatus } from '../utils/api'
 import { logout } from '../utils/auth'
+
+const STANDARDS = [
+  {
+    icon: <FileText size={14} />,
+    label: 'PHOENIX-301',
+    accent: '#00b894',
+    tag: 'Clinical Trial Protocol',
+    desc: 'Phase III, Randomized, Double-Blind clinical trial studying Phoenixin (PNX-301) in patients with Advanced Non-Small Cell Lung Cancer (NSCLC).',
+    bullets: ['Visit schedules & timing windows', 'Dosing rules & tolerances', 'Banned co-medications', 'Required assessments per visit', '200+ sites · 5000+ patient visits'],
+  },
+  {
+    icon: <Scale size={14} />,
+    label: 'ICH E6(R2) GCP',
+    accent: '#f59e0b',
+    tag: 'Severity Classification',
+    desc: 'International Council for Harmonisation — Good Clinical Practice guideline E6(R2). Defines the regulatory grading scale for every detected deviation.',
+    bullets: ['🔴 Major — safety or data integrity risk', '🟡 Minor — protocol non-compliance', '🔵 Administrative — documentation error'],
+  },
+  {
+    icon: <Network size={14} />,
+    label: 'HL7 FHIR R4',
+    accent: '#3b82f6',
+    tag: 'Data Export Standard',
+    desc: 'Health Level 7 Fast Healthcare Interoperability Resources R4. Global standard for exchanging patient data with hospital EHR/EDC systems.',
+    bullets: ['Patient → FHIR Patient resource', 'Visit → FHIR Encounter resource', 'Dose → MedicationAdministration', 'Deviation → DetectedIssue resource'],
+  },
+  {
+    icon: <Database size={14} />,
+    label: 'CDISC SDTM',
+    accent: '#8b5cf6',
+    tag: 'Regulatory Submission',
+    desc: 'Clinical Data Interchange Standards Consortium — Study Data Tabulation Model. FDA-required format embedded as domain annotations inside FHIR exports.',
+    bullets: ['DM — Demographics', 'SV — Subject Visits', 'CM — Concomitant Medications', 'FA — Findings About'],
+  },
+]
+
+function StandardItem({ icon, label, accent, tag, desc, bullets }) {
+  const itemRef = useRef(null)
+  const [tooltip, setTooltip] = useState(null) // { top, left }
+
+  const showTooltip = () => {
+    if (!itemRef.current) return
+    const rect = itemRef.current.getBoundingClientRect()
+    setTooltip({ top: rect.top + rect.height / 2, left: rect.right + 12 })
+  }
+  const hideTooltip = () => setTooltip(null)
+
+  return (
+    <div
+      ref={itemRef}
+      className="sidebar-info sidebar-std-item"
+      onMouseEnter={showTooltip}
+      onMouseLeave={hideTooltip}
+    >
+      <span className="link-icon" style={{ color: accent }}>{icon}</span>
+      <span>{label}</span>
+
+      {tooltip && createPortal(
+        <div
+          className="std-tooltip std-tooltip-visible"
+          style={{ top: tooltip.top, left: tooltip.left }}
+        >
+          <div className="std-tooltip-header" style={{ borderColor: accent }}>
+            <span className="std-tooltip-icon" style={{ background: `${accent}22`, color: accent }}>{icon}</span>
+            <div>
+              <div className="std-tooltip-label">{label}</div>
+              <div className="std-tooltip-tag" style={{ color: accent }}>{tag}</div>
+            </div>
+          </div>
+          <p className="std-tooltip-desc">{desc}</p>
+          <ul className="std-tooltip-bullets">
+            {bullets.map(b => <li key={b}>{b}</li>)}
+          </ul>
+        </div>,
+        document.body
+      )}
+    </div>
+  )
+}
 
 const navItems = [
   { path: '/', icon: <LayoutDashboard size={16} />, label: 'Trial Overview' },
@@ -139,37 +219,7 @@ export default function Sidebar({ user, onLogout }) {
 
           <div className="sidebar-section-label" style={{ marginTop: 20 }}>Standards & Protocol</div>
 
-          {[
-            {
-              icon: <FileText size={14} />,
-              label: 'PHOENIX-301',
-              tooltip: 'Phase III, Randomized, Double-Blind clinical trial studying Phoenixin (PNX-301) in patients with Advanced Non-Small Cell Lung Cancer (NSCLC). Covers visit schedules, dosing rules, banned co-medications, and required assessments across 200+ sites and 5000+ patient visits.',
-            },
-            {
-              icon: <Scale size={14} />,
-              label: 'ICH E6(R2) GCP',
-              tooltip: 'International Council for Harmonisation — Good Clinical Practice guideline E6(R2). Defines the three-tier severity scale used to classify every detected deviation: Major (safety/data risk), Minor (non-compliance), or Administrative (documentation error).',
-            },
-            {
-              icon: <Network size={14} />,
-              label: 'HL7 FHIR R4',
-              tooltip: 'Health Level 7 Fast Healthcare Interoperability Resources R4. The global standard format for exchanging patient data with hospital EHR/EDC systems. Trial data is exported as FHIR resources: Patient, Encounter, MedicationAdministration, DetectedIssue.',
-            },
-            {
-              icon: <Database size={14} />,
-              label: 'CDISC SDTM',
-              tooltip: 'Clinical Data Interchange Standards Consortium — Study Data Tabulation Model. Regulatory submission standard required by the FDA. SDTM domain annotations (DM, SV, CM, FA) are embedded inside FHIR exports so data is ready for regulatory submission.',
-            },
-          ].map(({ icon, label, tooltip }) => (
-            <div
-              key={label}
-              className="sidebar-info sidebar-info-tooltip"
-              title={tooltip}
-            >
-              <span className="link-icon">{icon}</span>
-              {label}
-            </div>
-          ))}
+          {STANDARDS.map(s => <StandardItem key={s.label} {...s} />)}
         </nav>
 
         <ThemeToggle />
