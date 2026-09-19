@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { useNavigate, NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Hospital, AlertTriangle, ClipboardList,
-  MessageSquare, FileText, Pill, Shield, LogOut, Menu, X,
-  Wifi, WifiOff, Loader2,
+  MessageSquare, FileText, Shield, LogOut, Menu, X,
+  Wifi, WifiOff, Loader2, FlaskConical, Scale, Network, Database,
 } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
 import { fetchMcpStatus } from '../utils/api'
@@ -137,15 +137,39 @@ export default function Sidebar({ user, onLogout }) {
             </span>
           </NavLink>
 
-          <div className="sidebar-section-label" style={{ marginTop: 20 }}>Protocol</div>
-          <div className="sidebar-info">
-            <span className="link-icon"><FileText size={14} /></span>
-            PHOENIX-301
-          </div>
-          <div className="sidebar-info">
-            <span className="link-icon"><Pill size={14} /></span>
-            Phoenixin (PNX-301)
-          </div>
+          <div className="sidebar-section-label" style={{ marginTop: 20 }}>Standards & Protocol</div>
+
+          {[
+            {
+              icon: <FileText size={14} />,
+              label: 'PHOENIX-301',
+              tooltip: 'Phase III, Randomized, Double-Blind clinical trial studying Phoenixin (PNX-301) in patients with Advanced Non-Small Cell Lung Cancer (NSCLC). Covers visit schedules, dosing rules, banned co-medications, and required assessments across 200+ sites and 5000+ patient visits.',
+            },
+            {
+              icon: <Scale size={14} />,
+              label: 'ICH E6(R2) GCP',
+              tooltip: 'International Council for Harmonisation — Good Clinical Practice guideline E6(R2). Defines the three-tier severity scale used to classify every detected deviation: Major (safety/data risk), Minor (non-compliance), or Administrative (documentation error).',
+            },
+            {
+              icon: <Network size={14} />,
+              label: 'HL7 FHIR R4',
+              tooltip: 'Health Level 7 Fast Healthcare Interoperability Resources R4. The global standard format for exchanging patient data with hospital EHR/EDC systems. Trial data is exported as FHIR resources: Patient, Encounter, MedicationAdministration, DetectedIssue.',
+            },
+            {
+              icon: <Database size={14} />,
+              label: 'CDISC SDTM',
+              tooltip: 'Clinical Data Interchange Standards Consortium — Study Data Tabulation Model. Regulatory submission standard required by the FDA. SDTM domain annotations (DM, SV, CM, FA) are embedded inside FHIR exports so data is ready for regulatory submission.',
+            },
+          ].map(({ icon, label, tooltip }) => (
+            <div
+              key={label}
+              className="sidebar-info sidebar-info-tooltip"
+              title={tooltip}
+            >
+              <span className="link-icon">{icon}</span>
+              {label}
+            </div>
+          ))}
         </nav>
 
         <ThemeToggle />
