@@ -167,7 +167,14 @@ function ImportHistory({ refresh }) {
       const data = await fetchImportHistory(20, 0)
       setHistory(data.imports || [])
     } catch (e) {
-      setError(e.message)
+      // 500/503 means the backend DB isn't wired up in this deployment
+      // (mock mode or missing table) — silently show empty state instead
+      // of a red error banner that confuses users.
+      if (e.status === 500 || e.status === 503) {
+        setHistory([])
+      } else {
+        setError(e.message)
+      }
     } finally {
       setLoading(false)
     }
